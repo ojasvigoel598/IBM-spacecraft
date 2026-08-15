@@ -14,7 +14,18 @@ while still showing real integration pattern (code ready for production).
 import os
 import json
 import random
+from pathlib import Path
 from typing import Dict, List, Optional
+
+# Load the project-root .env so a key dropped into .env is picked up without
+# exporting it in the shell. Existing environment variables always win.
+# python-dotenv is optional: the code reads os.environ directly, so a missing
+# dotenv just means the user must export the vars themselves.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+except Exception:
+    pass
 
 from .prompts import SYSTEM_PROMPT_BASE, SYSTEM_PROMPT_RAG, build_user_prompt, build_rag_user_prompt
 from .rag import get_retriever
