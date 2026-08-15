@@ -1,0 +1,33 @@
+__pycache__/
+*.pyc
+
+# P3-002 FIX: Make gitignore consistent — ignore generated artifacts but keep .gitkeep for demo
+# Generated models and CSVs are ignored for git to keep repo small, but kept locally for demo run
+missionmind/models/*.joblib
+missionmind/models/*.pkl
+missionmind/models/features.txt
+missionmind/data/*.csv
+!missionmind/data/.gitkeep
+!missionmind/models/.gitkeep
+
+.venv/
+node_modules/
+.env
+.freebuff/
+
+# Keep comparison report and grounded params (JSON) even though models ignored
+!missionmind/models/comparison_report.json
+!missionmind/data/grounded_parameters.json
+!missionmind/data/nasa_battery_sample.csv
+
+# Real NASA PCoE battery data (55 MB, re-downloadable - see docs/NASA_REAL_VALIDATION.md)
+missionmind/data/real_nasa/*.mat
+# NASA C-MAPSS turbofan RUL data (re-downloadable - see docs/RUL_PROGNOSTICS.md)
+missionmind/data/real_nasa/_cmapss/
+
+# ---- tooling / local-only ------------------------------------------------
+.pytest_cache/
+.agents/
+web/dist/
+uploads/
+*.log

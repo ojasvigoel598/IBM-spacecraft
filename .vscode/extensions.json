@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-toolsai.jupyter",
+    "ms-python.debugpy",
+    "njpwerner.autodocstring",
+    "streetsidesoftware.code-spell-checker",
+    "tamasfe.even-better-toml",
+    "esbenp.prettier-vscode"
+  ]
+}

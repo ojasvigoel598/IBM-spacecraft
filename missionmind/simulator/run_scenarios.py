@@ -1,0 +1,127 @@
+"""
+MissionMind - Scenario Runner
+Spec Section 5 + Section 2 schema
+
+Produces exactly 3 CSVs:
+- data/run_normal.csv
+- data/run_solar_failure.csv
+- data/run_radiator_failure.csv
+
+Schema: time_s, solar_power_w, load_power_w, battery_soc, battery_voltage_v,
+        heat_in_w, heat_out_w, temperature_c, failure_mode
+"""
+
+import os
+import sys
+import pandas as pd
+
+# Allow running as script from root
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+
+from missionmind.simulator.power import (
+    P_SOLAR_MAX, P_LOAD, E_CAP_WH, V_MIN, V_MAX, SOC_0,
+    compute_power_step
+)
+from missionmind.simulator.thermal import (
+    MC_P, ETA, EPSILON, AREA, SIGMA, T_SPACE_K, T0_K, DEMO_FAST,
+    compute_thermal_step, Q_IN_NOMINAL, compute_equilibrium_temp
+)
+from missionmind.simulator.failures import (
+    get_solar_degradation, get_radiator_effective_epsilon_area,
+    SOLAR_FINAL_FACTOR, EPSILON_A_NOMINAL, EPSILON_A_FINAL
+)
+from missionmind.simulator.orbital import orbit_columns
+
+def run_scenario(failure_mode: str = "none", duration_s: int = 3600, soc_init: float = SOC_0, t0_k: float = T0_K, add_noise: bool = False, add_orbit: bool = True):
+    """
+    Run full coupled simulation for one scenario.
+    failure_mode: "none", "solar_degradation", "radiator_degradation"
+    add_noise: if True, adds Gaussian sensor noise (2W solar, 0.01V, 0.1C) for realism (P2-003)
+    """
+    assert failure_mode in ("none", "solar_degradation", "radiator_degradation")
+
+    rows = []
+    soc = soc_init
+    T_k = t0_k
+    import numpy as np
+    rng = np.random.default_rng(0) if add_noise else None
+
+    for t in range(duration_s):
+        # Power side
+        deg_factor = get_solar_degradation(t, failure_mode)
+        solar_w, load_w, soc_new, voltage_v, net_w = compute_power_step(t, soc, deg_factor)
+
+        # Thermal side
+        eps_eff, area_eff, epsA_prod = get_radiator_effective_epsilon_area(t, failure_mode)
+        T_new, q_in, q_out, dT = compute_thermal_step(t, T_k, eps_eff, area_eff, q_in=Q_IN_NOMINAL)
+
+        # P2-003: Optional sensor noise for realism
+        if add_noise:
+            solar_w_noisy = solar_w + rng.normal(0, 2.0)  # 2W noise
+            voltage_v_noisy = voltage_v + rng.normal(0, 0.01)  # 0.01V noise
+            temp_c_noisy = (T_new - 273.15) + rng.normal(0, 0.1)  # 0.1C noise
+            q_out_noisy = q_out + rng.normal(0, 0.5)
+        else:
+            solar_w_noisy = solar_w
+            voltage_v_noisy = voltage_v
+            temp_c_noisy = T_new - 273.15
+            q_out_noisy = q_out
+
+        row = {
+            "time_s": t,
+            "solar_power_w": solar_w_noisy,
+            "load_power_w": load_w,
+            "battery_soc": soc_new,
+            "battery_voltage_v": voltage_v_noisy,
+            "heat_in_w": q_in,
+            "heat_out_w": q_out_noisy,
+            "temperature_c": temp_c_noisy,
+            "failure_mode": failure_mode,
+        }
+        # P5-ORBIT: real Kepler orbital telemetry (deterministic) appended to
+        # every frame. Additive only — the ML feature matrix and all existing
+        # consumers select columns by name, so this cannot change trained
+        # behaviour, but it lets physics rules explain solar dips (eclipse).
+        if add_orbit:
+            row.update(orbit_columns(float(t)))
+        rows.append(row)
+
+        soc = soc_new
+        T_k = T_new
+
+    df = pd.DataFrame(rows)
+    return df
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Generate 3 CSV scenarios (P2-003 add_noise optional)")
+    parser.add_argument("--add-noise", action="store_true", help="Add Gaussian sensor noise for realism")
+    parser.add_argument("--duration", type=int, default=3600, help="Duration seconds")
+    args = parser.parse_args()
+
+    base_dir = os.path.join(os.path.dirname(__file__), '..', 'data')
+    os.makedirs(base_dir, exist_ok=True)
+
+    # Print equilibrium temps for sanity
+    T_eq_k, T_eq_c = compute_equilibrium_temp()
+    print(f"[Thermal] Nominal equilibrium: {T_eq_k:.2f}K = {T_eq_c:.2f}C, Q_in={Q_IN_NOMINAL}W (mc_p={MC_P} J/K, DEMO_FAST={DEMO_FAST})")
+    T_eq_rad_k, T_eq_rad_c = compute_equilibrium_temp(epsilon_eff=EPSILON, area_eff=EPSILON_A_FINAL/EPSILON)
+    print(f"[Thermal] Radiator degraded (epsA={EPSILON_A_FINAL:.4f}) equilibrium: {T_eq_rad_k:.2f}K = {T_eq_rad_c:.2f}C")
+    print(f"[Config] ADD_NOISE={args.add_noise}, DURATION={args.duration}s")
+
+    scenarios = {
+        "none": "run_normal.csv",
+        "solar_degradation": "run_solar_failure.csv",
+        "radiator_degradation": "run_radiator_failure.csv",
+    }
+
+    for mode, fname in scenarios.items():
+        df = run_scenario(failure_mode=mode, duration_s=args.duration, add_noise=args.add_noise)
+        out_path = os.path.join(base_dir, fname)
+        df.to_csv(out_path, index=False)
+        print(f"Wrote {out_path}: {len(df)} rows, final SOC={df['battery_soc'].iloc[-1]:.3f}, final V={df['battery_voltage_v'].iloc[-1]:.2f}V, final T={df['temperature_c'].iloc[-1]:.2f}C, solar_final={df['solar_power_w'].iloc[-1]:.1f}W")
+
+    print("All 3 CSVs produced matching schema in Spec §2")
+
+if __name__ == "__main__":
+    main()
