@@ -219,7 +219,65 @@ def generate_explanation(anomaly_input: dict, use_rag: bool = True, top_k: int =
     mock_result = _mock_granite_response(anomaly_input, retrieved_docs if use_rag else None)
     return mock_result
 
+def check_config() -> Dict:
+    """Report whether a real watsonx Granite call is possible right now.
+
+    Returns plain booleans/strings so the dashboard, tests, and the --check
+    CLI can all use the same truth. No network is touched.
+    """
+    api_key = os.getenv("WATSONX_APIKEY") or os.getenv("WATSONX_API_KEY")
+    project_id = os.getenv("WATSONX_PROJECT_ID")
+    return {
+        "sdk_installed": bool(WATSONX_AVAILABLE),
+        "api_key_present": bool(api_key),
+        "project_id_present": bool(project_id),
+        "url": os.getenv("WATSONX_URL", "https://us-south.ml.cloud.ibm.com"),
+        "model_id": os.getenv("WATSONX_MODEL_ID", "ibm/granite-3-2b-instruct"),
+        "ready_for_real_call": bool(WATSONX_AVAILABLE and api_key and project_id),
+    }
+
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Granite client self-test")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="verify watsonx config; makes a real call if a key is set",
+    )
+    args = parser.parse_args()
+
+    if args.check:
+        cfg = check_config()
+        print("=== Granite / watsonx config check ===")
+        for key, value in cfg.items():
+            print(f"  {key}: {value}")
+        if not cfg["ready_for_real_call"]:
+            missing = []
+            if not cfg["sdk_installed"]:
+                missing.append("ibm-watsonx-ai SDK (pip install -r requirements.txt)")
+            if not cfg["api_key_present"]:
+                missing.append("WATSONX_APIKEY")
+            if not cfg["project_id_present"]:
+                missing.append("WATSONX_PROJECT_ID")
+            print("\nNOT READY for a real watsonx call. Missing:")
+            for item in missing:
+                print(f"  - {item}")
+            print("Paste the key and project id into .env, then re-run this check.")
+            raise SystemExit(1)
+        print("\nConfig looks ready. Making a real Granite call to verify the key...")
+        from .prompts import example_input_json
+        try:
+            out = generate_explanation(example_input_json(), use_rag=True)
+            print(json.dumps(out, indent=2))
+            print("\nCHECK PASS: real watsonx Granite call succeeded.")
+        except Exception as e:
+            print(f"\nCHECK FAIL: {e}")
+            print("The key or project id may be wrong, or the model is not deployable"
+                  " in your watsonx project. Fix .env and re-run.")
+            raise SystemExit(1)
+        raise SystemExit(0)
+
     from .prompts import example_input_json, example_thermal_input
     print("=== Test Granite Client Mock (Power) ===")
     inp = example_input_json()
