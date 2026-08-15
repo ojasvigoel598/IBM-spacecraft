@@ -67,6 +67,10 @@ python -m missionmind.ml.train                    # 2880-row hold-out split, see
 # 4. run the dashboard
 streamlit run missionmind/viz/app.py                  # Streamlit + Three.js 3D viewer (port 8501)
 
+# 5. optional: real Granite on watsonx.ai (everything runs on the mock without this)
+cp .env.example .env                                   # then fill in WATSONX_APIKEY + WATSONX_PROJECT_ID
+python -m missionmind.ai.granite_client --check        # "CHECK PASS" = key works; restart the dashboard after
+
 # web mission-control console (React + shadcn/ui + Tailwind)
 python -m uvicorn missionmind.viz.api_server:app --port 8100   # JSON API on the same pipeline
 cd web && npm install && npm run dev -- --port 5173            # console at http://localhost:5173
@@ -368,6 +372,7 @@ python missionmind/e2e_dry_run.py
 | Auth | `WATSONX_APIKEY` (env) + `WATSONX_PROJECT_ID` (env) |
 | Code | `missionmind/ai/granite_client.py`: `_call_watsonx_granite()` is the only real-network path |
 | Mock | `generate_explanation(...)` falls back to a deterministic mock that still returns schema-correct JSON with RAG citations; the sidebar shows which mode is active |
+| Verify a key | `python -m missionmind.ai.granite_client --check` reports config and makes a real call when a key is set |
 | RAG corpus | `missionmind/ai/knowledge_base/{power_subsystem, thermal_subsystem, mission_rules}.md` |
 | Citations | Granite is asked to fill a `citations[]` array linking each claim to a TF-IDF chunk, so each dashboard claim is traceable to a file |
 
