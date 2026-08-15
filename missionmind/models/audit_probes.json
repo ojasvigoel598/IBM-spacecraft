@@ -1,0 +1,200 @@
+{
+  "P1": {
+    "dt_uniform": true,
+    "max_raw_delta_T_first_10s": 0.06512644263472112,
+    "max_derivative_after_steady_state": 0.023793581024165178,
+    "first_diff_forced_to_zero": true,
+    "comment": "df.diff() is \u0394T (numerically dT/dt only if dt=1s). First sample is forcibly 0 (not the true derivative)."
+  },
+  "P2": {
+    "note": "Contamination controls the IF threshold. Tuning against the FULL failure runs (last cols) = test-set tuning.",
+    "sweep": [
+      {
+        "contamination": 0.01,
+        "FPR_val_normal": 0.002777777777777778,
+        "flag_rate_solar_full": 0.008611111111111111,
+        "flag_rate_radiator_full": 0.008611111111111111
+      },
+      {
+        "contamination": 0.02,
+        "FPR_val_normal": 0.018055555555555554,
+        "flag_rate_solar_full": 0.019444444444444445,
+        "flag_rate_radiator_full": 0.019444444444444445
+      },
+      {
+        "contamination": 0.03,
+        "FPR_val_normal": 0.030555555555555555,
+        "flag_rate_solar_full": 0.03027777777777778,
+        "flag_rate_radiator_full": 0.03027777777777778
+      },
+      {
+        "contamination": 0.05,
+        "FPR_val_normal": 0.04861111111111111,
+        "flag_rate_solar_full": 0.051111111111111114,
+        "flag_rate_radiator_full": 0.04972222222222222
+      },
+      {
+        "contamination": 0.07,
+        "FPR_val_normal": 0.06388888888888888,
+        "flag_rate_solar_full": 0.07111111111111111,
+        "flag_rate_radiator_full": 0.06888888888888889
+      },
+      {
+        "contamination": 0.1,
+        "FPR_val_normal": 0.08333333333333333,
+        "flag_rate_solar_full": 0.4802777777777778,
+        "flag_rate_radiator_full": 0.8622222222222222
+      }
+    ],
+    "model_train_const": "Currently 0.07. Selection metric = 'flag rate on scenarios that this audit uses as test'."
+  },
+  "P3": {
+    "solar_train_added_noise_std": 1.0,
+    "solar_original_std": 0.0,
+    "solar_train_after_noise_std": 1.0004709898133604,
+    "solar_test_clean_std": 0.0,
+    "dT_train_first_fill": 0.0,
+    "dT_test_first_fill": 0.0,
+    "comment": "solar training std ~ 1.0 (added Gaussian); test std = 0 (constant from sim). Distribution mismatch."
+  },
+  "P4": {
+    "comment": "Train = first 80%, val = last 20% of the same deterministic run.",
+    "per_col": {
+      "V": {
+        "train_mean": 27.97923611111111,
+        "val_mean": 28.0,
+        "train_std": 0.07139096273468847,
+        "val_std": 0.0,
+        "max_abs_diff_mean": 0.020763888888890136
+      },
+      "solar": {
+        "train_mean": 520.0,
+        "val_mean": 520.0,
+        "train_std": 0.0,
+        "val_std": 0.0,
+        "max_abs_diff_mean": 0.0
+      },
+      "T": {
+        "train_mean": -18.479112103275327,
+        "val_mean": -40.74465776866253,
+        "train_std": 17.156133734333114,
+        "val_std": 1.0696166295130283,
+        "max_abs_diff_mean": 22.2655456653872
+      },
+      "dT": {
+        "train_mean": -0.02211306616947767,
+        "val_mean": -0.005157682718655425,
+        "train_std": 0.015002744330702157,
+        "val_std": 0.0006482430823359756,
+        "max_abs_diff_mean": 0.016955383450822245
+      },
+      "dV": {
+        "train_mean": 0.0001384259259259261,
+        "val_mean": 0.0,
+        "train_std": 0.00040670156658916646,
+        "val_std": 0.0,
+        "max_abs_diff_mean": 0.0001384259259259261
+      }
+    }
+  },
+  "P5": {
+    "comment": "Same model trained on run A, evaluated on independent runs B, C.",
+    "FPR_on_run_B": 0.020833333333333332,
+    "FPR_on_run_C": 0.020833333333333332
+  },
+  "P6": {
+    "comment": "IF is tree-based \u2014 scaling should not change ranking but may affect distance-based sibling models.",
+    "raw": {
+      "FPR_normal": 0.04861111111111111,
+      "solar": 0.051111111111111114,
+      "rad": 0.04972222222222222
+    },
+    "scaled": {
+      "FPR_normal": 0.04861111111111111,
+      "solar": 0.051111111111111114,
+      "rad": 0.04972222222222222
+    }
+  },
+  "P7": {
+    "ablation": [
+      {
+        "feature_set": "all",
+        "solar_recall": 0.051111111111111114,
+        "rad_recall": 0.04972222222222222
+      },
+      {
+        "feature_set": "drop_V",
+        "solar_recall": 0.049166666666666664,
+        "rad_recall": 0.6527777777777778
+      },
+      {
+        "feature_set": "drop_solar",
+        "solar_recall": 0.049444444444444444,
+        "rad_recall": 0.049444444444444444
+      },
+      {
+        "feature_set": "drop_T",
+        "solar_recall": 0.049166666666666664,
+        "rad_recall": 0.049166666666666664
+      },
+      {
+        "feature_set": "drop_dT",
+        "solar_recall": 0.050277777777777775,
+        "rad_recall": 0.46111111111111114
+      },
+      {
+        "feature_set": "drop_dV",
+        "solar_recall": 0.058055555555555555,
+        "rad_recall": 0.04888888888888889
+      }
+    ]
+  },
+  "P8": {
+    "comment": "Comparing ensemble rules on FULL run_solar / run_radiator (test-set = contamination was tuned against this).",
+    "per_rule": [
+      {
+        "rule": "OR",
+        "solar_tpr": 0.08805555555555555,
+        "rad_tpr": 0.8788888888888889
+      },
+      {
+        "rule": "AND",
+        "solar_tpr": 0.04833333333333333,
+        "rad_tpr": 0.04833333333333333
+      },
+      {
+        "rule": "MAJ",
+        "solar_tpr": 0.07833333333333334,
+        "rad_tpr": 0.07833333333333334
+      },
+      {
+        "rule": "FULL_only",
+        "solar_tpr": 0.07472222222222222,
+        "rad_tpr": 0.07
+      },
+      {
+        "rule": "PWR_only",
+        "solar_tpr": 0.07,
+        "rad_tpr": 0.07
+      },
+      {
+        "rule": "THM_only",
+        "solar_tpr": 0.07,
+        "rad_tpr": 0.8655555555555555
+      }
+    ],
+    "OR_FPR_normal": 0.08333333333333333
+  },
+  "P9": {
+    "solar": {
+      "first_flag_after_600": 605,
+      "delay_s": 5,
+      "total_flag_after_900": 1.0
+    },
+    "radiator": {
+      "first_flag_after_600": 720,
+      "delay_s": 120,
+      "total_flag_after_900": 1.0
+    }
+  }
+}

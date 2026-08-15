@@ -1,0 +1,21 @@
+{
+  "A_ensemble": {
+    "coherent": true,
+    "has_ensemble": true,
+    "max_diff": 0.0
+  },
+  "B_no_ensemble": {
+    "ok": true,
+    "err": null,
+    "has_ensemble": false,
+    "models_loaded_ok": true
+  },
+  "C_empty": {
+    "ok": true,
+    "rows": 0
+  },
+  "D_score_csv": {
+    "has_three_columns": true,
+    "rows": 3600
+  }
+}

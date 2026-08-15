@@ -1,0 +1,43 @@
+# MissionMind — dependency manifest (canonical).
+# Install into the project venv:
+#   .venv/Scripts/python.exe -m pip install -r requirements.txt
+# Validate with:
+#   .venv/Scripts/python.exe -m missionmind.check_environment
+#   .venv/Scripts/python.exe -m missionmind.check_dependencies
+#
+# Every REQUIRED package below is imported by missionmind/ source or by the
+# notebook/validation gate. OPTIONAL packages are tooling-only and never
+# fail the environment check.
+
+# ---- REQUIRED (runtime + validation gate) --------------------------------
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0        # drift.py (ks_2samp) + nasa_real_validation.py (spearmanr, scipy.io)
+scikit-learn>=1.3.0
+joblib>=1.3.0
+streamlit>=1.35.0
+plotly>=5.20.0
+matplotlib>=3.7.0    # notebook figures
+ibm-watsonx-ai>=1.1.0
+pyod>=1.1.0
+xgboost>=2.0.0
+torch>=2.0.0         # deep-NN PINN autograd backprop (CPU build is enough)
+paho-mqtt>=1.6.0     # telemetry edge node (MQTT transport)
+fastapi>=0.110.0     # viz/api_server.py (FastAPI backend)
+uvicorn>=0.29.0      # ASGI server for api_server.py
+pydantic>=2.6.0      # request/response models in api_server.py
+pytest>=7.4.0        # test runner (Priority 4: install and use pytest)
+shap>=0.44.0         # model explainability (Priority 7); explainability.py falls
+                     #   back to occlusion attribution if shap import fails
+# Notebook execution / validation (project §27-28, §21; used by
+# .freebuff/build_notebook.py and validate_project.py)
+nbformat>=5.9.0
+nbclient>=0.10.0
+nbconvert>=7.16.0
+ipykernel>=6.29.0
+
+# ---- OPTIONAL (tooling only; never fails the env gate) --------------------
+python-dotenv>=1.0.0  # .env convenience; code reads os.environ directly
+pillow>=10.0.0        # demo gif / screenshot tooling (.freebuff/)
+requests>=2.31.0      # HTTP helpers (scratch tooling)
+gmsh>=4.11.0          # STEP/STL CAD export utilities (satellite model files)

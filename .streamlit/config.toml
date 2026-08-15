@@ -1,0 +1,15 @@
+[theme]
+# MissionMind space-ops design system
+primaryColor = "#00d4ff"
+backgroundColor = "#05070f"
+secondaryBackgroundColor = "#0a0f1e"
+textColor = "#e8f4ff"
+
+[server]
+# Local demo server: headless, fixed port, no usage stats collection
+headless = true
+port = 8501
+address = "127.0.0.1"
+
+[browser]
+gatherUsageStats = false

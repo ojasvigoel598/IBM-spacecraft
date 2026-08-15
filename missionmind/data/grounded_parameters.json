@@ -1,0 +1,53 @@
+{
+  "source": "NASA Battery B0005 + CubeSat EPS typical",
+  "nasa_sample": {
+    "cell_voltage_min": 3.246,
+    "cell_voltage_max": 4.2,
+    "cell_capacity_Ah": 2.0076,
+    "temp_range_C": [
+      23.83,
+      31.23
+    ],
+    "row_count": 300,
+    "data_quality_checks": {
+      "rows>100": true,
+      "voltage_range_valid": true,
+      "capacity_valid": true,
+      "temp_range_valid": true
+    },
+    "data_good_enough": true,
+    "linear_model_rmse_V": 0.5276950380269657,
+    "linear_model_ok": false
+  },
+  "our_assumptions": {
+    "P_solar_max": 520,
+    "P_load": 400,
+    "E_cap_Wh": 100,
+    "V_min": 24.0,
+    "V_max": 28.0,
+    "mc_p_J_K": 2000,
+    "epsilon": 0.85,
+    "area_m2": 0.5,
+    "failure_solar_factor_final": 0.48,
+    "failure_radiator_fraction_final": 0.1
+  },
+  "grounded_recommendation": {
+    "E_cap_Wh": 104.0,
+    "V_min": 22.7,
+    "V_max": 29.4,
+    "P_solar_max_comment": "520W realistic for 0.5m2 array at 30% eff (1366 W/m2 *0.5*0.3=~205W, but 520W for larger deployable; NASA's ISS arrays 120kW, CubeSat 20-50W, so 520W high but plausible for small sat with deployable)",
+    "mc_p_comment": "2000 J/K realistic for 10kg CubeSat (cp~900 J/kgK *10kg=9000, but effective 2000 for single node)",
+    "radiator_comment": "epsilon 0.85, area 0.5m2 realistic, final 10% (0.0425) gives 124C eq, HIGH risk >60C per NASA thermal design guidelines"
+  },
+  "justification": [
+    "Our 100Wh matches NASA B0005 7S2P ~103.6Wh",
+    "Our 24-28V matches 7S Li-ion 22.4-29.4V range",
+    "Our solar 520W is high for CubeSat but plausible for small sat with 2m2 deployable; could be tuned to 300W for strict CubeSat",
+    "Thermal mass 2000 J/K is low but gives faster demo; real 10kg sat ~9000 J/K would be slower, we note this as intentional cut",
+    "Failure shapes (ramp 600-900s) match CMAPSS turbofan degradation shape: stable\u2192ramp\u2192new steady state"
+  ],
+  "public_datasets_used": [
+    "NASA Prognostics Battery Data Set B0005 (https://data.nasa.gov/Aerospace/Battery-Data-Set/ci8y-cfhg)",
+    "NASA CMAPSS Turbofan (https://data.nasa.gov/Aerospace/CMAPSS-Jet-Engine-Simulated-Data/ff5v-kuh6) for thermal rise while flat fuel flow analogy"
+  ]
+}

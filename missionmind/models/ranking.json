@@ -1,0 +1,122 @@
+{
+  "per_model": {
+    "IsolationForest (Baseline Unsupervised)": {
+      "balance_score": 0.5282,
+      "F1_avg": 0.8907,
+      "FPR_before_avg": 0.725,
+      "delay_avg_s": 0.0,
+      "F1_solar": 0.9322,
+      "F1_radiator": 0.8492,
+      "FPR_before_solar": 0.725,
+      "FPR_before_radiator": 0.725,
+      "delay_solar_s": 0.0,
+      "delay_radiator_s": 0.0,
+      "catastrophic_miss": false
+    },
+    "LOF (Unsupervised)": {
+      "balance_score": 0.4091,
+      "F1_avg": 0.9091,
+      "FPR_before_avg": 1.0,
+      "delay_avg_s": 0.0,
+      "F1_solar": 0.9091,
+      "F1_radiator": 0.9091,
+      "FPR_before_solar": 1.0,
+      "FPR_before_radiator": 1.0,
+      "delay_solar_s": 0.0,
+      "delay_radiator_s": 0.0,
+      "catastrophic_miss": false
+    },
+    "OneClassSVM (Unsupervised)": {
+      "balance_score": 0.412,
+      "F1_avg": 0.9095,
+      "FPR_before_avg": 0.995,
+      "delay_avg_s": 0.0,
+      "F1_solar": 0.9095,
+      "F1_radiator": 0.9095,
+      "FPR_before_solar": 0.995,
+      "FPR_before_radiator": 0.995,
+      "delay_solar_s": 0.0,
+      "delay_radiator_s": 0.0,
+      "catastrophic_miss": false
+    },
+    "MLP Autoencoder (Unsupervised FeedForward)": {
+      "balance_score": 0.4098,
+      "F1_avg": 0.909,
+      "FPR_before_avg": 0.9983,
+      "delay_avg_s": 0.0,
+      "F1_solar": 0.9092,
+      "F1_radiator": 0.9087,
+      "FPR_before_solar": 0.9983,
+      "FPR_before_radiator": 0.9983,
+      "delay_solar_s": 0.0,
+      "delay_radiator_s": 0.0,
+      "catastrophic_miss": false
+    },
+    "Hybrid DIF (Unsupervised Hybrid Deep Isolated Forest)": {
+      "balance_score": 0.4091,
+      "F1_avg": 0.9091,
+      "FPR_before_avg": 1.0,
+      "delay_avg_s": 0.0,
+      "F1_solar": 0.9091,
+      "F1_radiator": 0.9091,
+      "FPR_before_solar": 1.0,
+      "FPR_before_radiator": 1.0,
+      "delay_solar_s": 0.0,
+      "delay_radiator_s": 0.0,
+      "catastrophic_miss": false
+    },
+    "FCNN Supervised (MLP 100-50-20)": {
+      "balance_score": 0.6095,
+      "F1_avg": 0.8032,
+      "FPR_before_avg": 0.3867,
+      "delay_avg_s": 2.0,
+      "F1_solar": 0.9083,
+      "F1_radiator": 0.6981,
+      "FPR_before_solar": 0.3867,
+      "FPR_before_radiator": 0.3867,
+      "delay_solar_s": 2.0,
+      "delay_radiator_s": 2.0,
+      "catastrophic_miss": false
+    },
+    "XGBOD Supervised (Extreme Boosting Outlier Detector)": {
+      "balance_score": 0.4091,
+      "F1_avg": 0.9091,
+      "FPR_before_avg": 1.0,
+      "delay_avg_s": 0.0,
+      "F1_solar": 0.9091,
+      "F1_radiator": 0.9091,
+      "FPR_before_solar": 1.0,
+      "FPR_before_radiator": 1.0,
+      "delay_solar_s": 0.0,
+      "delay_radiator_s": 0.0,
+      "catastrophic_miss": false
+    },
+    "Custom Physics-Informed NN": {
+      "balance_score": 0.5513,
+      "F1_avg": 0.7159,
+      "FPR_before_avg": 0.3283,
+      "delay_avg_s": 2.0,
+      "F1_solar": 0.8248,
+      "F1_radiator": 0.607,
+      "FPR_before_solar": 0.3283,
+      "FPR_before_radiator": 0.3283,
+      "delay_solar_s": 2.0,
+      "delay_radiator_s": 2.0,
+      "catastrophic_miss": false
+    }
+  },
+  "best_per_class": {
+    "unsupervised": [
+      "IsolationForest (Baseline Unsupervised)",
+      0.5282
+    ],
+    "supervised": [
+      "FCNN Supervised (MLP 100-50-20)",
+      0.6095
+    ],
+    "physics-informed": [
+      "Custom Physics-Informed NN",
+      0.5513
+    ]
+  }
+}

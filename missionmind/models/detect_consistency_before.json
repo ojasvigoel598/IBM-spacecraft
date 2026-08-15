@@ -1,0 +1,47 @@
+{
+  "run_normal.csv": {
+    "baseline": {
+      "file": "run_normal.csv",
+      "n_rows": 3600,
+      "flag_rate_strict_100_600": 0.0,
+      "flag_rate_after_900": 0.0,
+      "first_detect_s": null,
+      "delay_s": null
+    },
+    "coherence_BEFORE_fix": {
+      "contradictory_flag_with_above_median_score": 0,
+      "consistent_flag_with_below_or_equal_median_score": 70,
+      "flag_with_top10pct_score": 0
+    }
+  },
+  "run_solar_failure.csv": {
+    "baseline": {
+      "file": "run_solar_failure.csv",
+      "n_rows": 3600,
+      "flag_rate_strict_100_600": 0.0,
+      "flag_rate_after_900": 1.0,
+      "first_detect_s": 786.0,
+      "delay_s": 186.0
+    },
+    "coherence_BEFORE_fix": {
+      "contradictory_flag_with_above_median_score": 1076,
+      "consistent_flag_with_below_or_equal_median_score": 1808,
+      "flag_with_top10pct_score": 0
+    }
+  },
+  "run_radiator_failure.csv": {
+    "baseline": {
+      "file": "run_radiator_failure.csv",
+      "n_rows": 3600,
+      "flag_rate_strict_100_600": 0.0,
+      "flag_rate_after_900": 1.0,
+      "first_detect_s": 735.0,
+      "delay_s": 135.0
+    },
+    "coherence_BEFORE_fix": {
+      "contradictory_flag_with_above_median_score": 1156,
+      "consistent_flag_with_below_or_equal_median_score": 1779,
+      "flag_with_top10pct_score": 19
+    }
+  }
+}
