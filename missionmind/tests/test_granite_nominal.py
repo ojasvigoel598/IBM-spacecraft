@@ -91,11 +91,31 @@ def test_ml_flag_absent_stays_nominal():
     assert "Nominal operation" in out["probable_cause"]
 
 
+def test_check_config_shape_and_readiness_contract():
+    """check_config() must report the same readiness the code uses to decide
+    between a real watsonx call and the mock fallback."""
+    from missionmind.ai.granite_client import check_config
+
+    cfg = check_config()
+    expected_keys = {"sdk_installed", "api_key_present", "project_id_present",
+                     "url", "model_id", "ready_for_real_call"}
+    assert expected_keys.issubset(cfg.keys()), f"missing keys: {expected_keys - cfg.keys()}"
+    for key in ("sdk_installed", "api_key_present", "project_id_present", "ready_for_real_call"):
+        assert isinstance(cfg[key], bool), f"{key} must be a bool"
+    assert cfg["model_id"], "model_id must resolve to a non-empty value"
+    assert cfg["url"].startswith("https://"), cfg["url"]
+    # The readiness flag must be the conjunction of the three requirements.
+    assert cfg["ready_for_real_call"] == (
+        cfg["sdk_installed"] and cfg["api_key_present"] and cfg["project_id_present"]
+    )
+
+
 if __name__ == "__main__":
     tests = [test_nominal_soc_renders_in_nominal_branch,
              test_nominal_soc_renders_in_solar_branch,
              test_ml_flag_prevents_nominal_verdict_when_detector_flags,
-             test_ml_flag_absent_stays_nominal]
+             test_ml_flag_absent_stays_nominal,
+             test_check_config_shape_and_readiness_contract]
     failed = []
     for t in tests:
         try:
