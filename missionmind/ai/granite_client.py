@@ -129,12 +129,15 @@ def _mock_granite_response(anomaly_input: dict, retrieved_docs: Optional[List[Di
 
     return result
 
-def _call_watsonx_granite(system_prompt: str, user_prompt: str, model_id: str = "ibm/granite-3-2b-instruct") -> str:
+def _call_watsonx_granite(system_prompt: str, user_prompt: str, model_id: Optional[str] = None) -> str:
     """
     Real watsonx call - adaptable to current SDK.
-    Looks up env vars: WATSONX_APIKEY, WATSONX_PROJECT_ID, WATSONX_URL (optional)
+    Looks up env vars: WATSONX_APIKEY, WATSONX_PROJECT_ID, WATSONX_URL (optional),
+    WATSONX_MODEL_ID (optional, defaults to ibm/granite-3-2b-instruct).
     Returns raw text output.
     """
+    if model_id is None:
+        model_id = os.getenv("WATSONX_MODEL_ID", "ibm/granite-3-2b-instruct")
     api_key = os.getenv("WATSONX_APIKEY") or os.getenv("WATSONX_API_KEY")
     project_id = os.getenv("WATSONX_PROJECT_ID")
     url = os.getenv("WATSONX_URL", "https://us-south.ml.cloud.ibm.com")
