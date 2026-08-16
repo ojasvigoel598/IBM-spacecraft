@@ -33,6 +33,17 @@ jobs:
           echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
       - name: Install dependencies
         run: .venv/bin/python -m pip install --upgrade pip && .venv/bin/python -m pip install -r requirements.txt
+      - name: Cache NASA battery data (real B0005/6/7/B0018 .mat files)
+        id: nasa-cache
+        uses: actions/cache@v4
+        with:
+          path: missionmind/data/real_nasa/*.mat
+          key: nasa-battery-${{ hashFiles('missionmind/ml/download_nasa_data.py') }}
+          restore-keys: |
+            nasa-battery-
+      - name: Download NASA battery data (only on cache miss)
+        if: steps.nasa-cache.outputs.cache-hit != 'true'
+        run: .venv/bin/python -m missionmind.ml.download_nasa_data
       - name: Register notebook kernel (environment gate checks kernel specs)
         run: .venv/bin/python -m ipykernel install --user --name missionmind-ci
       - name: Environment gate
