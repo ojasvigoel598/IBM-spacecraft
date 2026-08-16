@@ -405,6 +405,21 @@ python missionmind/e2e_dry_run.py
 # walks the RAG, exercises the Granite client (real + mock), validates the dashboards.
 ```
 
+Fresh-checkout behaviour:
+
+- The suite auto-regenerates the three gitignored scenario CSVs
+  (`missionmind/data/run_*.csv`) at session start via
+  `missionmind/tests/conftest.py`, so a fresh clone runs green without
+  committing generated telemetry (each solve takes ~0.3 s).
+- Tests that need the real NASA `.mat` files (PINN on B0005, RUL
+  bootstrap interval) skip with a clear reason until the data is present
+  in `missionmind/data/real_nasa/`; with the data downloaded they run in
+  full (see `missionmind/docs/NASA_REAL_VALIDATION.md`).
+- CI runs the same gate and suite inside a fresh venv on every push, plus
+  a job that builds the React console and validates the demo video and
+  captions, and a job that verifies pushed commits are authored by the
+  pinned identity.
+
 ---
 
 ## IBM watsonx.ai integration
