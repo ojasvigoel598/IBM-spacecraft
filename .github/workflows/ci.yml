@@ -5,6 +5,11 @@ name: CI
 #   2. running the tests must not dirty the tree (phantom-diff guard)
 #   3. no secrets may be committed
 #   4. pushed commits must be authored by the pinned personal identity
+#
+# The test job mirrors the documented local setup (see README quickstart):
+# it creates a virtualenv, installs requirements.txt into it, and registers
+# a notebook kernel, because missionmind/check_environment.py verifies that
+# a venv and Jupyter kernel specs exist before it passes.
 
 on:
   push:
@@ -22,12 +27,18 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
+      - name: Create virtualenv (mirror local setup)
+        run: |
+          python -m venv .venv
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: .venv/bin/python -m pip install --upgrade pip && .venv/bin/python -m pip install -r requirements.txt
+      - name: Register notebook kernel (environment gate checks kernel specs)
+        run: .venv/bin/python -m ipykernel install --user --name missionmind-ci
       - name: Environment gate
-        run: python -m missionmind.check_environment
+        run: .venv/bin/python -m missionmind.check_environment
       - name: Run test suite
-        run: python -m pytest missionmind/tests/ -q
+        run: .venv/bin/python -m pytest missionmind/tests/ -q
       - name: Phantom-diff guard (testing must not modify the tree)
         run: |
           git status --porcelain
