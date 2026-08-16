@@ -59,6 +59,47 @@ jobs:
           fi
           echo "secret scan: clean"
 
+  frontend:
+    name: Frontend build + demo assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+      - name: Build the console (tsc + vite)
+        working-directory: web
+        run: npm run build
+      - name: Validate demo assets (video + captions)
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check imageio-ffmpeg
+          python3 - <<'EOF'
+          import subprocess
+          from pathlib import Path
+
+          srt = Path("demo/captions.srt")
+          assert srt.exists(), "demo/captions.srt missing"
+          cues = [b for b in srt.read_text(encoding="utf-8").split("\n\n") if b.strip()]
+          assert len(cues) >= 10, f"expected >=10 SRT cues, got {len(cues)}"
+
+          mp4 = Path("demo/missionmind_demo.mp4")
+          assert mp4.exists(), "demo/missionmind_demo.mp4 missing"
+          assert mp4.stat().st_size > 1_000_000, "demo video suspiciously small"
+
+          import imageio_ffmpeg
+          ff = imageio_ffmpeg.get_ffmpeg_exe()
+          r = subprocess.run([ff, "-i", str(mp4)], capture_output=True, text=True)
+          probe = r.stderr
+          assert "Duration" in probe and "Audio:" in probe, "demo video invalid or missing audio"
+          print(f"demo assets OK: {len(cues)} cues, {mp4.stat().st_size/1e6:.1f} MB video")
+          EOF
+
   sync:
     name: Sync rule (author identity)
     runs-on: ubuntu-latest
