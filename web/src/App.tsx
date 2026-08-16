@@ -20,7 +20,10 @@ import {
   ChevronRight,
 } from 'lucide-react'
 
-const API = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8100'
+// Same-origin by default (/api/*): served by the Vite dev proxy locally and
+// by the Vercel Python function in production. Set VITE_API_URL to point at a
+// separate API origin when the backend is hosted elsewhere.
+const API = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '')
 
 type Row = Record<string, number>
 type Summary = {
