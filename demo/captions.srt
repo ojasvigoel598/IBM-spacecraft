@@ -1,0 +1,90 @@
+1
+00:00:00,350 --> 00:00:10,400
+MissionMind. An AI copilot for satellite mission operations. Built for
+the IBM advance space exploration challenge.
+
+2
+00:00:10,900 --> 00:00:32,200
+This is the Mission Control dashboard. Every number on screen comes from
+a live physics simulation, solved in real time. Solar array output,
+battery state of charge, bus voltage, and spacecraft temperature.
+Nominal operation: solar holds five hundred twenty watts, battery full,
+temperatures stable.
+
+3
+00:00:32,700 --> 00:00:49,640
+Now we inject a realistic failure: a degrading solar array. The fault
+ramps in over three hundred seconds, and the telemetry begins to change.
+Solar power falls toward two hundred fifty watts, net power goes
+negative, and the battery starts to drain.
+
+4
+00:00:50,140 --> 00:01:02,590
+Watch the detector. The machine learning ensemble flags the anomaly at
+around thirteen minutes into the mission, well before the fault fully
+develops. System status flips to critical.
+
+5
+00:01:03,090 --> 00:01:16,190
+MissionMind also predicts ahead. The remaining useful life counter is a
+leading indicator: it starts counting down before the detector confirms,
+telling the operator the battery has about ninety six minutes of margin.
+
+6
+00:01:16,690 --> 00:01:32,350
+The ML diagnostics panel shows exactly what the model sees: the anomaly
+score, the health state, the ensemble verdict, and confidence. Three
+Isolation Forest models are combined so a single subsystem anomaly is
+still caught.
+
+7
+00:01:32,850 --> 00:01:47,940
+Why did this happen? The RAG evidence tab retrieves the relevant
+engineering documentation and shows the actual passages with relevance
+scores. The probable cause and recommended action are grounded in those
+sources, not guessed.
+
+8
+00:01:48,440 --> 00:02:05,350
+The reasoning layer formats everything into a structured assessment:
+risk level, probable cause, recommended action, and the exact documents
+used. It is built for IBM watsonx Granite, and runs on an honest
+deterministic fallback when no API key is set.
+
+9
+00:02:05,850 --> 00:02:21,830
+Compare failure modes side by side. Solar degradation drains the battery
+while temperature stays flat. Radiator degradation does the opposite:
+temperature climbs while power is untouched. The physics makes the
+distinction clear.
+
+10
+00:02:22,330 --> 00:02:33,700
+A physically rendered Three.js digital twin of the spacecraft is driven
+by the same live telemetry, so operators watch the asset respond in
+three dimensions as the fault evolves.
+
+11
+00:02:34,200 --> 00:02:52,070
+This is the dynamic path. A virtual edge node streams frame by frame
+over a real JSON lines transport, and the production ensemble scores
+every incoming window. A physical ESP32 or Raspberry Pi speaking the
+same wire format drops in unchanged.
+
+12
+00:02:52,570 --> 00:03:06,940
+A React web console and a FastAPI backend expose the same pipeline to
+any browser. Health checks, scenario summaries, alerts with physics and
+RAG evidence, and live trace of which code actually ran.
+
+13
+00:03:07,440 --> 00:03:17,700
+The parameters are grounded in real NASA battery data, the physics is
+hand verified, and the full test suite passes: eighty one tests across
+nineteen suites.
+
+14
+00:03:18,200 --> 00:03:30,480
+MissionMind turns raw telemetry into a clear answer: what failed, why,
+what to do, and how much time is left. Clone the repository and run one
+command to start the mission.
