@@ -85,7 +85,15 @@ python -m missionmind.ai.granite_client --check        # "CHECK PASS" = key work
 # web mission-control console (React + shadcn/ui + Tailwind)
 python -m uvicorn missionmind.viz.api_server:app --port 8100   # JSON API on the same pipeline
 cd web && npm install && npm run dev -- --port 5173            # console at http://localhost:5173
+
+# 6. install the git pre-commit hook (blocks wrong author, secrets, or runtime files)
+bash scripts/install-hooks.sh
+
+# 7. verify the environment and run the tests (CI runs the same checks on every push)
+python -m missionmind.check_environment && python -m pytest missionmind/tests/ -q
 ```
+
+A pre-commit hook (`.githooks/pre-commit`) and the GitHub Actions workflow (`.github/workflows/ci.yml`) enforce the repo's clean-sync contract: every change is committed under the `ojasvigoel598` identity, pushed, and verified; tests must pass and must not dirty the tree; secrets are refused at commit time and scanned in CI.
 
 Open `http://localhost:8501`. The 3D spacecraft CAD loads inside the dashboard; pick a scenario in the sidebar (Normal / Solar-Array Degradation / Radiator Degradation) and scrub the Mission Time Transport bar to jump anywhere in the 1-hour mission. The web console at `http://localhost:5173` is a lighter React front-end over the same scored telemetry: scenario switch, live scrubber, anomaly evidence, and a Live Ingest tab streaming a virtual ESP32 edge node through the production ensemble.
 
