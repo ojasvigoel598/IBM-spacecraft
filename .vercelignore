@@ -1,0 +1,19 @@
+# Keep the Python function bundle lean: everything below is not needed at
+# runtime on Vercel. The six trained inference models ARE needed and are
+# committed (missionmind/models/iforest*.joblib + scaler*.joblib); the rest
+# of the model/artifact directory stays gitignored and is not deployed.
+.venv/
+node_modules/
+web/node_modules/
+web/dist/
+.freebuff/
+__pycache__/
+*.pyc
+.pytest_cache/
+demo/
+screenshots/
+uploads/
+*.log
+missionmind/data/*.csv
+missionmind/data/real_nasa/
+missionmind/models/features.txt
