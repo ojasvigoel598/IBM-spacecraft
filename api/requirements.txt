@@ -1,0 +1,18 @@
+# Slim dependency manifest for the Vercel API function (api/index.py).
+#
+# This is the minimum set the FastAPI backend actually imports. It is a
+# deliberate subset of the full requirements.txt: no torch (PINN), pyod,
+# xgboost, streamlit, plotly, gmsh, or ibm-watsonx-ai — the watsonx SDK is
+# optional at runtime (guarded import; the deterministic mock is the
+# fallback). uvicorn is included only so the same file can serve locally.
+#
+# The six trained inference models are committed to the repo, so the
+# function scores without a training step.
+fastapi>=0.110.0
+uvicorn>=0.29.0
+pydantic>=2.6.0
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+scikit-learn>=1.3.0
+joblib>=1.3.0
