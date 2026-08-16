@@ -107,6 +107,30 @@ Open `http://localhost:8501`. The 3D spacecraft CAD loads inside the dashboard; 
 
 ---
 
+## Deploy on Vercel
+
+The React console and the FastAPI backend deploy to Vercel as one project:
+the Vite build serves the console and the Python function in `api/` serves
+`/api/*` on the same origin (the console calls same-origin `/api` unless
+`VITE_API_URL` is set). The six trained inference models are committed, so
+scoring works with no training step.
+
+1. Push this repo to GitHub, then import it in the Vercel dashboard.
+   `vercel.json` sets the build (`npm --prefix web run build`, output
+   `web/dist`) and the function config; Vercel installs the slim
+   `api/requirements.txt` (no torch / pyod / xgboost / streamlit).
+2. Optional: add `WATSONX_APIKEY` and `WATSONX_PROJECT_ID` as environment
+   variables to enable real Granite; without them the API uses the
+   deterministic mock fallback, exactly like local development.
+3. Optional: set `VITE_API_URL` only if the API is hosted on a different
+   origin than the console.
+
+The Streamlit dashboard is a Python server app and does not run on Vercel;
+use it locally (`streamlit run missionmind/viz/app.py`) or on Streamlit
+Community Cloud.
+
+---
+
 ## Architecture
 
 One telemetry sample through the whole stack:
