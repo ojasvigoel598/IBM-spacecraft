@@ -26,6 +26,10 @@ that was not needed) is cheaper than a false negative.
 - Frontend/UI work -> frontend-ui-engineering, shadcn-ui, web-design-guidelines
 - Browser QA of a live app -> webapp-testing
 - Docs -> documentation-and-adrs, create-readme, documentation-writer
+- Video editing / demo videos / captions / voiceover assembly -> video-editing
+  (installed from affaan-m/ecc; the awp-video-editing-skill repo no longer
+  exists - aiworkflowpro paused public repos; AIDEMO is paid, so this repo
+  uses free edge-tts + FFmpeg instead)
 - Git/shipping -> git-workflow-and-versioning
 - gstack suite (office-hours, review, qa, investigate, ship, cso) -> gstack router
 - Anything else: answer directly.
