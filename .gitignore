@@ -31,3 +31,6 @@ missionmind/data/real_nasa/_cmapss/
 web/dist/
 uploads/
 *.log
+
+# Runtime session state written by the dashboard on every run (not source)
+missionmind/data/last_session.json
