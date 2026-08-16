@@ -1,0 +1,66 @@
+name: CI
+
+# Enforces the repo's sync contract on every push to main and on PRs:
+#   1. environment gate + full test suite must pass
+#   2. running the tests must not dirty the tree (phantom-diff guard)
+#   3. no secrets may be committed
+#   4. pushed commits must be authored by the pinned personal identity
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Tests + clean-tree guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Environment gate
+        run: python -m missionmind.check_environment
+      - name: Run test suite
+        run: python -m pytest missionmind/tests/ -q
+      - name: Phantom-diff guard (testing must not modify the tree)
+        run: |
+          git status --porcelain
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::tests modified tracked or untracked files - the tree must stay clean after a run"
+            exit 1
+          fi
+          echo "phantom-diff guard: tree clean"
+      - name: Secret scan (tracked files)
+        run: |
+          if grep -rInE 'sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{30,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35,}|-----BEGIN [A-Z ]*PRIVATE KEY-----' \
+            --include='*.py' --include='*.json' --include='*.md' \
+            --include='*.yml' --include='*.yaml' --include='*.toml' \
+            --exclude-dir=.git --exclude-dir=.venv --exclude-dir=node_modules \
+            --exclude='package-lock.json' .; then
+            echo "::error::possible secret committed to the repository"
+            exit 1
+          fi
+          echo "secret scan: clean"
+
+  sync:
+    name: Sync rule (author identity)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify pushed HEAD is authored by ojasvigoel598
+        run: |
+          AUTHOR_NAME=$(git log -1 --format='%an')
+          AUTHOR_EMAIL=$(git log -1 --format='%ae')
+          echo "HEAD authored by: $AUTHOR_NAME <$AUTHOR_EMAIL>"
+          if ! echo "$AUTHOR_NAME" | grep -q 'ojasvigoel598' && ! echo "$AUTHOR_EMAIL" | grep -q 'ojasvigoel598'; then
+            echo "::error::pushed commit is not authored by ojasvigoel598"
+            exit 1
+          fi
+          echo "identity check: PASS"
