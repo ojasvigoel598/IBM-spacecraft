@@ -2,8 +2,16 @@ __pycache__/
 *.pyc
 
 # P3-002 FIX: Make gitignore consistent — ignore generated artifacts but keep .gitkeep for demo
-# Generated models and CSVs are ignored for git to keep repo small, but kept locally for demo run
+# Generated models and CSVs are ignored for git to keep repo small, but kept locally for demo run.
+# The six inference models the API needs at runtime are committed (small, ~9 MB total) so the
+# Vercel function can score without a training step; all other model artifacts stay ignored.
 missionmind/models/*.joblib
+!missionmind/models/iforest.joblib
+!missionmind/models/iforest_power.joblib
+!missionmind/models/iforest_thermal.joblib
+!missionmind/models/scaler.joblib
+!missionmind/models/scaler_power.joblib
+!missionmind/models/scaler_thermal.joblib
 missionmind/models/*.pkl
 missionmind/models/features.txt
 missionmind/data/*.csv
