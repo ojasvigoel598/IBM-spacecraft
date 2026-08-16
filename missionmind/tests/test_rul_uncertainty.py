@@ -11,12 +11,21 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
+import pytest
+
+from missionmind.ml.nasa_real_validation import REAL_DIR  # noqa: E402
 from missionmind.ml.prognostics import load_curves, eol_cap  # noqa: E402
 from missionmind.ml.rul_uncertainty import (  # noqa: E402
     rul_prediction_interval, time_to_limit_interval, format_interval,
 )
 
+B0005_MAT = os.path.join(REAL_DIR, "B0005.mat")
 
+
+@pytest.mark.skipif(
+    not os.path.exists(B0005_MAT),
+    reason="real NASA B0005 .mat not present (see docs/NASA_REAL_VALIDATION.md)",
+)
 def test_nasa_bootstrap_interval_contains_point():
     curves = load_curves()
     n, c = curves["B0005"]
