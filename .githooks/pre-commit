@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# pre-commit hook — MissionMind clean-sync enforcement.
+#
+# Installed by scripts/install-hooks.sh (sets core.hooksPath=.githooks).
+# Blocks commits that would break the repo's sync contract:
+#   1. wrong commit author (must be the pinned personal identity)
+#   2. staged runtime/temp files that must never be committed
+#   3. secrets / API keys in the staged diff
+#
+# Keep this hook deterministic and dependency-free: it uses only git and
+# grep, so it runs on any platform that can run the repo's other scripts.
+set -u
+
+FAIL=0
+
+fail() { echo "pre-commit: $1" >&2; FAIL=1; }
+
+# --- 1. author identity ----------------------------------------------------
+# The contribution graph must stay on the personal account. The repo-local
+# config is pinned, but a mis-set global config or -c override would silently
+# attribute the commit elsewhere, so check the would-be author explicitly.
+IDENT="$(git var GIT_AUTHOR_IDENT 2>/dev/null || true)"
+if ! printf '%s' "$IDENT" | grep -q 'ojasvigoel598'; then
+  fail "commit author is not the pinned identity: $IDENT"
+  fail "  fix: git config user.name ojasvigoel598"
+  fail "       git config user.email 272228662+ojasvigoel598@users.noreply.github.com"
+fi
+
+# --- 2. runtime / temp files that must never be staged ---------------------
+# last_session.json is rewritten by the dashboard on every run; the demo
+# render writes raw/temp intermediates that only exist mid-pipeline. None of
+# these belong in git — if one is staged, the tree is guaranteed to go
+# phantom-dirty after the next run.
+PHANTOM='(^|/)(last_session\.json|missionmind_demo_raw\.mp4|_mix\.m4a|\.env)$'
+STAGED="$(git diff --cached --name-only --diff-filter=ACMR)"
+if printf '%s\n' "$STAGED" | grep -qE "$PHANTOM"; then
+  fail "staged files that must never be committed:"
+  printf '%s\n' "$STAGED" | grep -E "$PHANTOM" | sed 's/^/    /' >&2
+fi
+
+# --- 3. secrets in the staged diff -----------------------------------------
+# High-entropy tokens and private keys are always refused. For the watsonx
+# placeholders (.env.example) the value must be a real non-placeholder string
+# before the hook complains, so documenting the schema stays possible.
+SECRETS='(sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{30,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)'
+if git diff --cached | grep -E "$SECRETS" >/dev/null 2>&1; then
+  fail "possible secret found in staged diff (API key / token / private key); refusing to commit"
+fi
+if git diff --cached | grep -E 'WATSONX_(APIKEY|PROJECT_ID)[[:space:]]*=[[:space:]]*[^<[:space:]]+' \
+    | grep -vE 'your|y0ur|changeme|placeholder|example' >/dev/null 2>&1; then
+  fail "possible watsonx credential in staged diff; refusing to commit"
+fi
+
+if [ "$FAIL" -ne 0 ]; then
+  echo "pre-commit: commit blocked" >&2
+  exit 1
+fi
+exit 0
