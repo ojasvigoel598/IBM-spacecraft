@@ -33,6 +33,15 @@ from sklearn.preprocessing import StandardScaler
 DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
 MODEL_DIR = os.path.join(os.path.dirname(__file__), '..', 'models')
 
+# Inference artifacts that are committed for the deployed API. Rebuilding them
+# rewrites tracked files, which breaks the repo's clean-tree rule, so training
+# skips when they already exist unless --retrain is passed explicitly.
+INFERENCE_ARTIFACTS = [
+    "iforest.joblib", "scaler.joblib",
+    "iforest_power.joblib", "scaler_power.joblib",
+    "iforest_thermal.joblib", "scaler_thermal.joblib",
+]
+
 FEATURE_COLS = ["battery_voltage_v", "solar_power_w", "temperature_c"]
 
 def add_derivative_features(df: pd.DataFrame, dt_s: float = 1.0) -> pd.DataFrame:
@@ -71,6 +80,14 @@ def build_thermal_features(df: pd.DataFrame):
     return df[cols].values, cols
 
 def train():
+    if "--retrain" not in sys.argv and all(
+        os.path.exists(os.path.join(MODEL_DIR, name)) for name in INFERENCE_ARTIFACTS
+    ):
+        print("[train] Inference artifacts already exist in "
+              f"{os.path.abspath(MODEL_DIR)} - skipping rebuild. "
+              "These files are committed deploy artifacts; pass --retrain to "
+              "rebuild (and commit the new models) deliberately.")
+        return
     os.makedirs(MODEL_DIR, exist_ok=True)
     print("[train] Loading normal data")
     df = load_training_data()
