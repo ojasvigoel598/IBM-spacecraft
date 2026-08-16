@@ -401,8 +401,10 @@ End-to-end run with the project interpreter:
 
 ```bash
 python missionmind/e2e_dry_run.py
-# regenerates scenarios, retrains the ensemble, runs all ML detectors,
-# walks the RAG, exercises the Granite client (real + mock), validates the dashboards.
+# regenerates scenarios, exercises the training pipeline (rebuild of the
+# committed inference artifacts is skipped unless --retrain), runs all ML
+# detectors, walks the RAG, exercises the Granite client (real + mock),
+# validates the dashboards.
 ```
 
 Fresh-checkout behaviour:
@@ -414,11 +416,19 @@ Fresh-checkout behaviour:
 - Tests that need the real NASA `.mat` files (PINN on B0005, RUL
   bootstrap interval) skip with a clear reason until the data is present
   in `missionmind/data/real_nasa/`; with the data downloaded they run in
-  full (see `missionmind/docs/NASA_REAL_VALIDATION.md`).
-- CI runs the same gate and suite inside a fresh venv on every push, plus
-  a job that builds the React console and validates the demo video and
-  captions, and a job that verifies pushed commits are authored by the
-  pinned identity.
+  full. Download the official NASA BatteryAgingARC-FY08Q4 files with
+  `python -m missionmind.ml.download_nasa_data` (stdlib-only and
+  idempotent; see `missionmind/docs/NASA_REAL_VALIDATION.md`).
+- CI runs the same gate and suite inside a fresh venv on every push. It
+  downloads and caches the NASA `.mat` files (via `actions/cache`, keyed
+  on the download script), so the real-data tests execute rather than
+  skip. A second job builds the React console and validates the demo
+  video and captions, and a third verifies pushed commits are authored by
+  the pinned identity.
+- `main` has branch protection: the two CI checks (tests + clean tree,
+  frontend build + demo assets) must pass before a pull request merges.
+  Direct pushes by the repo owner are not blocked, matching this repo's
+  workflow.
 
 ---
 
