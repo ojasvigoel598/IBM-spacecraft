@@ -59,3 +59,11 @@ After every change: verify the change, commit that single change, push to
 https://github.com/ojasvigoel598/IBM-spacecraft, and verify the remote
 reflects it before continuing. One change = one commit. The repo-local
 git identity is pinned to ojasvigoel598; keep it that way.
+
+There is no change too small to sync. A one-word edit, a single line,
+a comment fix, a config tweak, a regenerated asset, a typo: each gets
+its own commit and push. Never leave the working tree dirty at the end
+of a task, and never batch unrelated changes into one commit. If
+something is not meant to be committed (runtime state, secrets, large
+generated files), it must be gitignored rather than left as a phantom
+diff.
