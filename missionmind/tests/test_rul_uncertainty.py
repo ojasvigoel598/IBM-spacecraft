@@ -24,7 +24,7 @@ B0005_MAT = os.path.join(REAL_DIR, "B0005.mat")
 
 @pytest.mark.skipif(
     not os.path.exists(B0005_MAT),
-    reason="real NASA B0005 .mat not present (see docs/NASA_REAL_VALIDATION.md)",
+    reason="real NASA B0005 .mat not present (see missionmind/docs/NASA_REAL_VALIDATION.md)",
 )
 def test_nasa_bootstrap_interval_contains_point():
     curves = load_curves()

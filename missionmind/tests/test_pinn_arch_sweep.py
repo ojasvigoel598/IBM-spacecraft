@@ -62,7 +62,7 @@ def test_sweep_covers_grid():
 
 @pytest.mark.skipif(
     not os.path.exists(B0005_MAT),
-    reason="real NASA B0005 .mat not present (see docs/NASA_REAL_VALIDATION.md)",
+    reason="real NASA B0005 .mat not present (see missionmind/docs/NASA_REAL_VALIDATION.md)",
 )
 def test_sweep_on_real_b0005():
     from missionmind.ml.nasa_real_validation import load_battery
