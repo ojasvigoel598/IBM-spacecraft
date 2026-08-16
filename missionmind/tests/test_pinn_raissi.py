@@ -25,11 +25,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 import numpy as np
 
+import pytest
+
+from missionmind.ml.nasa_real_validation import REAL_DIR  # noqa: E402
 from missionmind.ml.pinn_raissi import (
     RaissiBatteryPINN,
     exponential_ode_dCdn,
     exponential_residual,
 )
+
+B0005_MAT = os.path.join(REAL_DIR, "B0005.mat")
 
 
 def test_physics_loss_separate():
@@ -103,6 +108,10 @@ def test_lambda_controls_physics():
     assert pinn_lam1.physics_loss_history[-1] <= pinn_lam0.physics_loss_history[-1] * 1.05
 
 
+@pytest.mark.skipif(
+    not os.path.exists(B0005_MAT),
+    reason="real NASA B0005 .mat not present (see docs/NASA_REAL_VALIDATION.md)",
+)
 def test_runs_on_real_b0005():
     """End-to-end: train on REAL NASA B0005 capacity fade, get finite
     predictions and a non-trivial physics residual. We subsample to keep

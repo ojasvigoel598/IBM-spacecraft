@@ -27,6 +27,12 @@ from missionmind.ml.pinn_vs_pgnn import (
 
 MODELS_DIR = os.path.join(os.path.dirname(__file__), "..", "models")
 
+import pytest
+
+from missionmind.ml.nasa_real_validation import REAL_DIR  # noqa: E402
+
+B0005_MAT = os.path.join(REAL_DIR, "B0005.mat")
+
 
 def test_sweep_rows_shape():
     rows = sweep_pinn_architectures(
@@ -54,6 +60,10 @@ def test_sweep_covers_grid():
     print("  PASS grid coverage")
 
 
+@pytest.mark.skipif(
+    not os.path.exists(B0005_MAT),
+    reason="real NASA B0005 .mat not present (see docs/NASA_REAL_VALIDATION.md)",
+)
 def test_sweep_on_real_b0005():
     from missionmind.ml.nasa_real_validation import load_battery
     b5 = load_battery("B0005")
