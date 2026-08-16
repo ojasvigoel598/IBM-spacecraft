@@ -201,5 +201,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
     df = score_csv(args.input)
     print(df[["time_s","anomaly_score","anomaly_flag"]].tail(20))
-    print(f"Flag rate before 600s: {df[df['time_s']<600]['anomaly_flag'].mean():.3f}")
-    print(f"Flag rate after 900s: {df[df['time_s']>900]['anomaly_flag'].mean():.3f}")
+    before = df[df['time_s'] < 600]['anomaly_flag'].mean()
+    after = df[df['time_s'] > 900]['anomaly_flag'].mean()
+    print(f"Flag rate before 600s: {before:.3f}")
+    print(f"Flag rate after 900s: {after:.3f}")
+
+    # Quality gate for the committed inference artifacts (e2e dry-run): if the
+    # committed models drift from the simulator (stale training data, changed
+    # preprocessing), the scenario flag rates move and this fails loudly
+    # instead of silently degrading. Only the three known scenario CSVs assert.
+    name = os.path.basename(args.input)
+    if name == "run_normal.csv":
+        assert after < 0.10, f"normal scenario flagged {after:.3f} after 900s - committed models drifted"
+    elif name in ("run_solar_failure.csv", "run_radiator_failure.csv"):
+        assert after > 0.90, f"{name} flagged {after:.3f} after 900s - committed models drifted (expected >0.90)"
