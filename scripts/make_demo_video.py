@@ -5,10 +5,12 @@ Pipeline:
      no API key). Each segment is a separate mp3 so moviepy can size each
      scene to exactly the length of its narration.
   2. Render PIL title cards (dark mission-control theme).
-  3. Assemble with moviepy: per-scene Ken Burns zoom, 0.6s crossfades, a
-     subtle lower-third label, and the narration track.
+  3. Assemble with moviepy: static frames + hard cuts + narration track.
+  4. Post-process with FFmpeg (bundled with imageio-ffmpeg, free): burn the
+     narration script in as subtitles (SRT) and normalize loudness
+     (EBU R128 loudnorm) so the track plays at a consistent level.
 
-Output: demo/missionmind_demo.mp4  (1440x900, H.264, ~30fps)
+Output: demo/missionmind_demo.mp4  (1440x900, H.264, ~30fps) + demo/captions.srt
 
 Run:  .venv/Scripts/python.exe scripts/make_demo_video.py
 """
@@ -16,7 +18,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+import subprocess
 import sys
+import textwrap
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FRAMES = os.path.join(ROOT, "demo", "frames")
@@ -79,6 +83,37 @@ BODY_FONT = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "aria
 
 
 # --------------------------------------------------------------------------
+def build_srt(scenes: list, timings: list, out_path: str) -> None:
+    """Write captions.srt from the narration script, one cue per scene.
+
+    `timings` is a list of (key, duration_s) in the same order as `scenes`.
+    Each scene's narration text is wrapped and shown for the scene window.
+    """
+    lines_out = []
+    cue = 0
+    t = 0.0
+    for (key, _label, text, _title), (k2, dur) in zip(scenes, timings):
+        assert key == k2
+        wrapped = textwrap.wrap(text, width=72) or [""]
+        start = t + 0.35
+        end = t + dur - 0.15
+        body = "\n".join(wrapped)
+        cue += 1
+        lines_out.append(f"{cue}\n{srt_ts(start)} --> {srt_ts(end)}\n{body}\n")
+        t += dur
+    with open(out_path, "w", encoding="utf-8", newline="\r\n") as f:
+        f.write("\n".join(lines_out))
+    print(f"SRT -> {os.path.relpath(out_path, ROOT)} ({cue} cues)")
+
+
+def srt_ts(seconds: float) -> str:
+    ms = int(round((seconds - int(seconds)) * 1000))
+    s = int(seconds) % 60
+    m = (int(seconds) // 60) % 60
+    h = int(seconds) // 3600
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
 def make_title_card(text: str, subtitle: str, path: str) -> None:
     """Dark mission-control title card (1440x900)."""
     from PIL import Image, ImageDraw, ImageFont
@@ -137,6 +172,7 @@ def main() -> int:
     from moviepy import (AudioFileClip, ImageClip, concatenate_videoclips)
 
     clips = []
+    timings = []  # (key, dur_s) in scene order, drives the SRT
     for key, label, text, title in SCENES:
         audio_path = os.path.join(AUDIO, f"{key}.mp3")
         if not os.path.exists(audio_path):
@@ -144,6 +180,7 @@ def main() -> int:
             continue
         audio = AudioFileClip(audio_path)
         dur = audio.duration + 0.9  # small tail so narration never clips
+        timings.append((key, dur))
 
         if key.startswith("card_"):
             card_path = os.path.join(TITLE_CARDS, f"{key}.png")
@@ -162,13 +199,36 @@ def main() -> int:
     # crossfade mask pipeline keeps memory usage flat (no compositing at all).
     video = concatenate_videoclips(clips, method="chain")
     video = video.with_fps(FPS)
+
+    raw_mp4 = os.path.join(ROOT, "demo", "missionmind_demo_raw.mp4")
     video.write_videofile(
-        OUT_MP4, codec="libx264", audio_codec="aac",
+        raw_mp4, codec="libx264", audio_codec="aac",
         fps=FPS, preset="veryfast", bitrate="2500k",
         logger=None, threads=8, temp_audiofile=os.path.join(AUDIO, "_mix.m4a"),
         remove_temp=True,
     )
-    print(f"VIDEO -> {OUT_MP4} ({video.duration:.1f}s)")
+    print(f"RAW -> {raw_mp4} ({video.duration:.1f}s)")
+    video.close()
+
+    # FFmpeg post-pass (free, bundled binary): burn captions + loudnorm.
+    srt_path = os.path.join(ROOT, "demo", "captions.srt")
+    build_srt(SCENES, timings, srt_path)
+    import imageio_ffmpeg
+    ff = imageio_ffmpeg.get_ffmpeg_exe()
+    style = ("FontName=Arial,FontSize=24,PrimaryColour=&H00FFFFFF,"
+             "OutlineColour=&H00101010,BorderStyle=1,Outline=2,Shadow=1,"
+             "MarginV=42,Alignment=2")
+    # Run from demo/ so the subtitles filter sees captions.srt relative.
+    cmd = [ff, "-y", "-i", raw_mp4,
+           "-vf", f"subtitles=captions.srt:force_style='{style}'",
+           "-af", "loudnorm=I=-16:TP=-1.5:LRA=11",
+           "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+           "-c:a", "aac", "-b:a", "192k",
+           os.path.basename(OUT_MP4)]
+    print("FFmpeg: burning captions + loudnorm audio...")
+    subprocess.run(cmd, cwd=os.path.join(ROOT, "demo"), check=True)
+    os.remove(raw_mp4)
+    print(f"VIDEO -> {OUT_MP4}")
     return 0
 
 
