@@ -19,13 +19,24 @@ MissionMind is a satellite mission-operations stack that starts from physics and
 
 ## Demo
 
+**3.5-minute narrated walkthrough** of the whole stack, captured live from the running app: physics simulation, fault injection, ML detection, RUL, RAG evidence, Granite reasoning, scenario comparison, the 3D digital twin, live ingest, and the web console.
+
+<p align="center">
+  <video controls width="860" src="demo/missionmind_demo.mp4"></video>
+</p>
+
 Thirty seconds of the dashboard: scrubbing the mission clock through a solar-array failure, watching telemetry degrade, the RUL chip count down, and the 3D spacecraft react on the same simulated clock.
 
 <p align="center">
   <img src="demo.gif" alt="MissionMind dashboard scrubbing a 1-hour solar-failure mission" width="860">
 </p>
 
-Captured live from the running app. `demo.gif` regenerates from `streamlit run missionmind/viz/app.py` using the Mission Time Transport bar.
+Captured live from the running app. `demo.gif` regenerates from `streamlit run missionmind/viz/app.py` using the Mission Time Transport bar. The narrated MP4 regenerates with:
+
+```bash
+python scripts/capture_demo_frames.py   # live frames from the running dashboard (Playwright + system Chrome)
+python scripts/make_demo_video.py       # edge-tts narration + moviepy assembly -> demo/missionmind_demo.mp4
+```
 
 ---
 
