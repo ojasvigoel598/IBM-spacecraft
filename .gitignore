@@ -28,9 +28,9 @@ node_modules/
 !missionmind/data/grounded_parameters.json
 !missionmind/data/nasa_battery_sample.csv
 
-# Real NASA PCoE battery data (55 MB, re-downloadable - see docs/NASA_REAL_VALIDATION.md)
+# Real NASA PCoE battery data (55 MB, re-downloadable - see missionmind/docs/NASA_REAL_VALIDATION.md)
 missionmind/data/real_nasa/*.mat
-# NASA C-MAPSS turbofan RUL data (re-downloadable - see docs/RUL_PROGNOSTICS.md)
+# NASA C-MAPSS turbofan RUL data (re-downloadable - see missionmind/docs/RUL_PROGNOSTICS.md)
 missionmind/data/real_nasa/_cmapss/
 
 # ---- tooling / local-only ------------------------------------------------

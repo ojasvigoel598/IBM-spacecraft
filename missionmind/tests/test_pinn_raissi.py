@@ -110,7 +110,7 @@ def test_lambda_controls_physics():
 
 @pytest.mark.skipif(
     not os.path.exists(B0005_MAT),
-    reason="real NASA B0005 .mat not present (see docs/NASA_REAL_VALIDATION.md)",
+    reason="real NASA B0005 .mat not present (see missionmind/docs/NASA_REAL_VALIDATION.md)",
 )
 def test_runs_on_real_b0005():
     """End-to-end: train on REAL NASA B0005 capacity fade, get finite
