@@ -15,6 +15,7 @@ missionmind/models/*.joblib
 missionmind/models/*.pkl
 missionmind/models/features.txt
 missionmind/data/*.csv
+missionmind/data/scenario_manifest.json
 !missionmind/data/.gitkeep
 !missionmind/models/.gitkeep
 
