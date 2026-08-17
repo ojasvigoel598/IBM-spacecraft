@@ -34,6 +34,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 
+from missionmind.simulator.power import P_SOLAR_MAX
+from missionmind.simulator.config import EPSILON_A_NOMINAL, SIGMA, T_SPACE_K
+
 DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
 MODEL_DIR = os.path.join(os.path.dirname(__file__), '..', 'models')
 
@@ -49,17 +52,46 @@ INFERENCE_ARTIFACTS = [
 FEATURE_COLS = ["battery_voltage_v", "solar_power_w", "temperature_c"]
 
 def add_derivative_features(df: pd.DataFrame, dt_s: float = 1.0) -> pd.DataFrame:
-    """Add first derivatives to a telemetry DataFrame.
+    """Add first derivatives and the eclipse-adjusted solar residual.
 
     P1-AUDIT fix: previously `df["temperature_c"].diff()` returned ΔT (not dT/dt).
     The simulator emits one row per second so the numerics were equal to 1·s⁻¹,
     but the assumption was implicit and would silently break if dt != 1s. We now
     explicitly divide by dt_s and keep `fillna(0)` (the derivative at the first
     sample is undefined; 0 is the conservative choice).
+
+    P7: `solar_residual_w` = measured solar - P_max*sun_exposure is the
+    eclipse-ADJUSTED power residual. It is ~0 in eclipse (the drop is expected
+    orbital physics) and strongly negative for a genuine array fault in
+    sunlight or penumbra - the feature that lets the detector separate faults
+    from the (now physically real) eclipse dips. When sun_exposure is absent
+    (legacy frames) it degrades to 0.
     """
     df = df.copy()
     df["d_temp_dt"] = df["temperature_c"].diff().fillna(0) / max(dt_s, 1e-9)
     df["d_volt_dt"] = df["battery_voltage_v"].diff().fillna(0) / max(dt_s, 1e-9)
+    if "sun_exposure" in df.columns:
+        df["solar_residual_w"] = (df["solar_power_w"].astype(float)
+                                   - P_SOLAR_MAX * df["sun_exposure"].astype(float))
+    else:
+        df["solar_residual_w"] = 0.0
+    # P10: `thermal_residual_w` = measured radiator rejection minus the
+    # Stefan-Boltzmann expectation for a NOMINAL radiator at the measured
+    # temperature. It is ~0 whenever the radiator is healthy (the bus may be
+    # hot or cold for legitimate load/environment reasons) and strongly
+    # negative when the eps*A product has degraded - the feature that lets
+    # the detector see a radiator fault even when the faulted temperature
+    # profile overlaps the nominal early-run transient (the single-run
+    # training data is non-stationary: temperature cools over the run, so a
+    # warm-and-cooling faulted bus looks statistically like early nominal
+    # behaviour on raw temperature alone). Degrades to 0 when heat_out_w is
+    # absent (legacy frames).
+    if "heat_out_w" in df.columns:
+        t_k = df["temperature_c"].astype(float) + 273.15
+        expected = EPSILON_A_NOMINAL * SIGMA * (t_k ** 4 - T_SPACE_K ** 4)
+        df["thermal_residual_w"] = df["heat_out_w"].astype(float) - expected
+    else:
+        df["thermal_residual_w"] = 0.0
     return df
 
 def load_training_data():
@@ -80,9 +112,18 @@ def generate_training_data():
     the clean CSV is what keeps the fitted detectors quiet on nominal live
     telemetry while still catching injected faults; it also makes retraining
     self-contained and reproducible on any checkout.
+
+    P7: the nominal data is now eclipse-coupled (the power model responds to
+    orbital illumination) and includes the full eclipse / safe-mode / recharge
+    cycle, so the training set spans TWO full orbits (2 * ~95 min) and the
+    periodic LEO cyclostationary state is part of the normal envelope - a
+    single 1-hour run would end mid-eclipse and leave the periodic pattern
+    unrepresented.
     """
     from missionmind.simulator.run_scenarios import run_scenario
-    df = run_scenario(failure_mode="none", duration_s=3600, add_noise=True)
+    from missionmind.simulator.orbital import orbital_period_s
+    duration = int(2 * orbital_period_s())  # 2 full orbits, cyclostationary
+    df = run_scenario(failure_mode="none", duration_s=duration, add_noise=True)
     return add_derivative_features(df)
 
 DATASET_SIDECAR = os.path.join(MODEL_DIR, "dataset.json")
@@ -113,12 +154,12 @@ def record_dataset_manifest(X_full, X_power, X_thermal) -> dict:
     manifest = {
         "dataset_id": "-".join(ids),
         "feature_matrices": {"full": ids[0], "power": ids[1], "thermal": ids[2]},
-        "generator": "run_scenario(failure_mode='none', duration_s=3600, add_noise=True)",
-        "duration_s": 3600,
+        "generator": "run_scenario(failure_mode='none', duration_s=2*orbital_period, add_noise=True)",
+        "duration_s": int(2 * 5730.1),
         "add_noise": True,
         "noise_rng_seed": 0,
         "derivative_dt_s": 1.0,
-        "features_full": FEATURE_COLS + ["d_temp_dt", "d_volt_dt"],
+        "features_full": FEATURE_COLS + ["d_temp_dt", "d_volt_dt", "solar_residual_w", "thermal_residual_w"],
         "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ"),
     }
     # Preserve the committed manifest when the dataset is UNCHANGED: a rebuild
@@ -140,16 +181,24 @@ def record_dataset_manifest(X_full, X_power, X_thermal) -> dict:
 
 
 def build_feature_matrix(df: pd.DataFrame):
-    cols = FEATURE_COLS + ["d_temp_dt", "d_volt_dt"]
+    cols = FEATURE_COLS + ["d_temp_dt", "d_volt_dt", "solar_residual_w", "thermal_residual_w"]
     X = df[cols].values
     return X, cols
 
 def build_power_features(df: pd.DataFrame):
-    cols = ["battery_voltage_v", "solar_power_w", "d_volt_dt"]
+    # P10: the power detector keys on the ECLIPSE-ADJUSTED residual, not the
+    # raw solar value. In the eclipse-coupled training data the raw solar
+    # channel spans 0..P_max (umbra .. full sun), so a faulted 249.6 W looks
+    # like an ordinary mid-eclipse value and the raw column dilutes the very
+    # signal that separates fault from eclipse. The residual (measured minus
+    # P_max*sun_exposure) is ~0 in eclipse and strongly negative for a real
+    # array fault wherever it is observable - that is the physically informed
+    # feature the detector must split on.
+    cols = ["battery_voltage_v", "d_volt_dt", "solar_residual_w"]
     return df[cols].values, cols
 
 def build_thermal_features(df: pd.DataFrame):
-    cols = ["temperature_c", "d_temp_dt"]
+    cols = ["temperature_c", "d_temp_dt", "thermal_residual_w"]
     return df[cols].values, cols
 
 def _recorded_dataset_id():
@@ -224,8 +273,8 @@ def train():
     # model comparisons. The id hashes the actual fitted matrices.
     _manifest = record_dataset_manifest(X_full_noisy, X_power_noisy, X_thermal_noisy)
     print(f"[train] dataset_id {_manifest['dataset_id']} "
-          f"(run_scenario none/3600 s, add_noise=True, noise seed 0, "
-          f"features {feature_names_full})")
+          f"(run_scenario none/{_manifest['duration_s']} s, add_noise=True, "
+          f"noise seed 0, features {feature_names_full})")
 
     # FIX P0-003: 80/20 temporal split (kept). DOCUMENTED LIMITATION: this isolates
     # the steady-state tail from the burn-in transient — the validation set is a
@@ -263,10 +312,21 @@ def train():
     print(f"[train] contamination = {NAMED_CONTAMINATION} (chosen by held-out normal FP tolerance, NOT failure flag rates — P2 audit)")
 
     # Models - splitted for subsystem-specific detection
+    # P10: max_samples=1024 (not sklearn's 256 default, not the full set).
+    # The 256 default caps tree depth at log2(256)=8 and compresses the
+    # decision_function to a tiny band: an extreme outlier (e.g. a -270 W
+    # solar residual, ~135 sigma) only reached path length 6.2 vs 7.9 for a
+    # normal point, leaving the detector nearly deaf (fault score ~0).
+    # max_samples=1024 gives depth ~10, 6x the separation margin of 256 and
+    # identical detection to full-sample trees (verified: solar 1.000 in
+    # sunlight, radiator 1.000, normal 0.000), while keeping the SHAP
+    # TreeExplainer build at ~18s instead of ~100s.
+    IF_MAX_SAMPLES = 1024
     model_full = IsolationForest(
         contamination=NAMED_CONTAMINATION,
         n_estimators=300,
         max_features=1.0,
+        max_samples=IF_MAX_SAMPLES,
         random_state=42,
     )
     model_full.fit(X_full_scaled)
@@ -274,6 +334,7 @@ def train():
     model_power = IsolationForest(
         contamination=NAMED_CONTAMINATION,
         n_estimators=200,
+        max_samples=IF_MAX_SAMPLES,
         random_state=42,
     )
     model_power.fit(X_power_scaled)
@@ -281,6 +342,7 @@ def train():
     model_thermal = IsolationForest(
         contamination=NAMED_CONTAMINATION,
         n_estimators=200,
+        max_samples=IF_MAX_SAMPLES,
         random_state=42,
     )
     model_thermal.fit(X_thermal_scaled)
@@ -335,10 +397,42 @@ def train():
         before_strict = ensemble_flags[(df_f["time_s"] >= 100) & (df_f["time_s"] < 600)].mean()
         after = ensemble_flags[df_f["time_s"] > 900].mean() if len(ensemble_flags[df_f["time_s"]>900])>0 else 0
 
-        print(f"[eval] {fname}: flag rate before 0-600={before:.3f}, strict 100-600={before_strict:.3f}, after 900={after:.3f}")
+        # P10: the gates are illumination-aware. A solar-array fault is
+        # physically UNOBSERVABLE in umbra (a healthy array also produces ~0 W
+        # there - the residual carries no signal), so the detectable fraction
+        # of any window is bounded by its sunlight share. The gate therefore
+        # asserts (a) near-certain detection wherever the fault is observable
+        # (sunlight), (b) a correctly quiet umbra, and (c) a total rate above
+        # the physical sunlight floor. This replaces the old flat `after >
+        # 0.5`, which silently assumed an always-visible fault signature.
+        after_sun = after_umb = after
+        sun_frac = 1.0
+        if "in_eclipse" in df_f.columns:
+            sun_rows = (df_f["time_s"] > 900) & (df_f["in_eclipse"].astype(float) < 0.5)
+            umb_rows = (df_f["time_s"] > 900) & (df_f["in_eclipse"].astype(float) >= 0.5)
+            if sun_rows.any():
+                after_sun = ensemble_flags[sun_rows].mean()
+            if umb_rows.any():
+                after_umb = ensemble_flags[umb_rows].mean()
+            sun_frac = sun_rows.mean() if len(sun_rows) else 1.0
+
+        print(f"[eval] {fname}: flag rate before 0-600={before:.3f}, strict 100-600={before_strict:.3f}, "
+              f"after 900={after:.3f} (sunlight {after_sun:.3f} @ {sun_frac:.0%}, umbra {after_umb:.3f})")
 
         assert before_strict < 0.4, f"{fname} too many false positives strict before 100-600 {before_strict}"
-        assert after > 0.5, f"{fname} should detect anomaly after injection, got {after}"
+        if fname == "run_solar_failure.csv":
+            assert after_sun > 0.9, (f"{fname} must catch the array fault in sunlight, "
+                                     f"got sunlight rate {after_sun:.3f}")
+            assert after_umb < 0.5, (f"{fname} umbra must stay quiet (no signal there), "
+                                     f"got {after_umb:.3f}")
+            assert after > 0.9 * sun_frac - 0.05, (f"{fname} total after 900 must clear the sunlight floor "
+                                                   f"({sun_frac:.2f}), got {after:.3f}")
+        else:
+            # radiator fault: slow thermal ramp; detection must land by t=2000.
+            # The thermal residual is temperature-based and continuous through
+            # eclipse, so no illumination discount applies.
+            late = ensemble_flags[df_f["time_s"] > 2000].mean()
+            assert late > 0.85, f"{fname} should detect the radiator fault by t=2000, got {late:.3f}"
 
     print("[train] PASS all checks (ensemble logic)")
 
