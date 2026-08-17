@@ -52,13 +52,23 @@ jobs:
         run: .venv/bin/python -m pytest missionmind/tests/ -q
       - name: Dataset-change check (physics must not silently alter the training set)
         run: |
+          # The dataset_id is the invariant: a hash of the actual fitted
+          # feature matrices, produced by pure-float arithmetic + a frozen
+          # PCG64 RNG, so it reproduces across Python/sklearn versions. Fitted
+          # model BYTES are version-dependent (sklearn internals), so only the
+          # id is compared; model behaviour is guarded by the detect gates and
+          # the test suite in this same job.
+          OLD_ID=$(python -c "import json;print(json.load(open('missionmind/models/dataset.json'))['dataset_id'])")
           .venv/bin/python -m missionmind.ml.train --retrain
-          if [ -n "$(git status --porcelain -- missionmind/models)" ]; then
-            echo "::error::retraining changed models or dataset.json - a physics/code change altered the training data. Commit the new models + dataset.json deliberately (models/dataset.json records the dataset_id)."
-            git diff --stat -- missionmind/models
+          NEW_ID=$(python -c "import json;print(json.load(open('missionmind/models/dataset.json'))['dataset_id'])")
+          if [ "$OLD_ID" != "$NEW_ID" ]; then
+            echo "::error::dataset_id changed ($OLD_ID -> $NEW_ID): a physics/code change altered the training data. Commit the new models + dataset.json deliberately (models/dataset.json records the dataset_id)."
             exit 1
           fi
-          echo "dataset check: committed training set is byte-reproducible"
+          echo "dataset check: committed training set reproduces (dataset_id $NEW_ID)"
+          # restore environment-dependent model bytes so the phantom-diff guard
+          # below sees the committed tree
+          git checkout -- missionmind/models
       - name: Phantom-diff guard (testing must not modify the tree)
         run: |
           git status --porcelain
