@@ -1,0 +1,21 @@
+{
+  "dataset_id": "3f62d2dd7bb18f5e-4315d08a2c61360c-d334fca556001a95",
+  "feature_matrices": {
+    "full": "3f62d2dd7bb18f5e",
+    "power": "4315d08a2c61360c",
+    "thermal": "d334fca556001a95"
+  },
+  "generator": "run_scenario(failure_mode='none', duration_s=3600, add_noise=True)",
+  "duration_s": 3600,
+  "add_noise": true,
+  "noise_rng_seed": 0,
+  "derivative_dt_s": 1.0,
+  "features_full": [
+    "battery_voltage_v",
+    "solar_power_w",
+    "temperature_c",
+    "d_temp_dt",
+    "d_volt_dt"
+  ],
+  "generated_at_utc": "2026-08-17 17:12:34Z"
+}
