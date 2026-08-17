@@ -19,8 +19,12 @@ Production improvement:
 - Evaluate with strict window 100-600 for before to ignore initial 0-100 transient burn-in.
 """
 
+import hashlib
+import json
 import os
 import sys
+from datetime import datetime, timezone
+
 import pandas as pd
 import numpy as np
 import joblib
@@ -81,6 +85,48 @@ def generate_training_data():
     df = run_scenario(failure_mode="none", duration_s=3600, add_noise=True)
     return add_derivative_features(df)
 
+DATASET_SIDECAR = os.path.join(MODEL_DIR, "dataset.json")
+
+
+def dataset_fingerprint(X: np.ndarray) -> str:
+    """Deterministic identifier of a feature matrix (sha256 over float64 bytes).
+
+    The training set is generated in-memory by the seeded simulator, so the
+    same generator configuration always yields the same fingerprint. Any change
+    to the power/thermal solve, the noise model, the feature set or the seed
+    changes the id — which makes an intentional regeneration visible instead of
+    silently minting a new dataset.
+    """
+    h = hashlib.sha256()
+    h.update(np.ascontiguousarray(X, dtype=np.float64).tobytes())
+    return h.hexdigest()[:16]
+
+
+def record_dataset_manifest(X_full, X_power, X_thermal) -> dict:
+    """Record how the training set was generated, next to the model artifacts.
+
+    dataset_id is the hash of the actual fitted feature matrices, so a physics
+    update can never create a new training set that looks like the old one.
+    The manifest is committed with the models and printed at training time.
+    """
+    ids = [dataset_fingerprint(X) for X in (X_full, X_power, X_thermal)]
+    manifest = {
+        "dataset_id": "-".join(ids),
+        "feature_matrices": {"full": ids[0], "power": ids[1], "thermal": ids[2]},
+        "generator": "run_scenario(failure_mode='none', duration_s=3600, add_noise=True)",
+        "duration_s": 3600,
+        "add_noise": True,
+        "noise_rng_seed": 0,
+        "derivative_dt_s": 1.0,
+        "features_full": FEATURE_COLS + ["d_temp_dt", "d_volt_dt"],
+        "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ"),
+    }
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    with open(DATASET_SIDECAR, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    return manifest
+
+
 def build_feature_matrix(df: pd.DataFrame):
     cols = FEATURE_COLS + ["d_temp_dt", "d_volt_dt"]
     X = df[cols].values
@@ -94,12 +140,24 @@ def build_thermal_features(df: pd.DataFrame):
     cols = ["temperature_c", "d_temp_dt"]
     return df[cols].values, cols
 
+def _recorded_dataset_id():
+    if not os.path.exists(DATASET_SIDECAR):
+        return None
+    try:
+        with open(DATASET_SIDECAR, encoding="utf-8") as f:
+            return json.load(f).get("dataset_id")
+    except Exception:
+        return None
+
+
 def train():
     if "--retrain" not in sys.argv and all(
         os.path.exists(os.path.join(MODEL_DIR, name)) for name in INFERENCE_ARTIFACTS
     ):
+        _sid = _recorded_dataset_id()
         print("[train] Inference artifacts already exist in "
               f"{os.path.abspath(MODEL_DIR)} - skipping rebuild. "
+              f"Recorded training set: {_sid or '(unrecorded - pre-manifest artifacts)'}. "
               "These files are committed deploy artifacts; pass --retrain to "
               "rebuild (and commit the new models) deliberately.")
         return
@@ -148,6 +206,14 @@ def train():
     # must get the same sensor-noise treatment. Without it, IsolationForest on (temp, dTemp)
     # flags the ENTIRE normal steady-state tail as anomalous (thermal val FPR was 1.000).
     X_thermal_noisy = add_noise_if_constant(X_thermal, feature_names_thermal)
+
+    # Record which dataset these models were fit on, so a later physics/code
+    # change can never silently create a new training set that invalidates
+    # model comparisons. The id hashes the actual fitted matrices.
+    _manifest = record_dataset_manifest(X_full_noisy, X_power_noisy, X_thermal_noisy)
+    print(f"[train] dataset_id {_manifest['dataset_id']} "
+          f"(run_scenario none/3600 s, add_noise=True, noise seed 0, "
+          f"features {feature_names_full})")
 
     # FIX P0-003: 80/20 temporal split (kept). DOCUMENTED LIMITATION: this isolates
     # the steady-state tail from the burn-in transient — the validation set is a
