@@ -257,13 +257,36 @@ class LiveScorer:
             df_feat, self._models)
         row = df_feat.iloc[-1]
         self._unscored = 0
+
+        # P9: eclipse-aware live scoring. The raw ensemble flags any solar
+        # dip, but an eclipse dip is EXPECTED physics. Only suppress when the
+        # measured solar matches the eclipse-adjusted expectation (residual
+        # within tolerance); a fault far below that expectation keeps the flag.
+        _raw_flag = int(flags[-1])
+        _flag = _raw_flag
+        _explained = None
+        if _raw_flag and all(c in df_feat.columns
+                             for c in ("in_eclipse", "sun_exposure")):
+            from missionmind.physics_rules.rules import eclipse_residual
+            ecl = eclipse_residual(df_feat)
+            if ecl is not None and ecl["in_eclipse"]:
+                if ecl["status"] == "eclipse":
+                    _flag = 0
+                    _explained = (f"eclipse {ecl['eclipse_frac']:.0%}: solar "
+                                  f"{ecl['measured_solar_w']:.0f}W matches "
+                                  f"expected {ecl['expected_solar_w']:.0f}W")
+                else:
+                    _explained = (f"eclipse but solar {ecl['measured_solar_w']:.0f}W "
+                                  f"<< expected {ecl['expected_solar_w']:.0f}W -> fault")
+
         self._last = {
             "time_s": int(row["time_s"]),
             "solar_power_w": float(row["solar_power_w"]),
             "temperature_c": float(row["temperature_c"]),
             "battery_voltage_v": float(row["battery_voltage_v"]),
             "anomaly_score": float(scores[-1]),
-            "anomaly_flag": int(flags[-1]),
+            "anomaly_flag": _flag,
             "anomaly_source": int(attribution[-1]),
+            "eclipse_explained": _explained,
         }
         return self._last
