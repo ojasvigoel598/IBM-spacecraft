@@ -9,7 +9,7 @@
 [![Three.js](https://img.shields.io/badge/3D-Three.js-black.svg)]()
 [![watsonx.ai](https://img.shields.io/badge/IBM-watsonx.ai-1F70C1.svg)]()
 [![NASA PCoE](https://img.shields.io/badge/validation-NASA%20PCoE%20B0005%2F6%2F7%2F18-orange.svg)]()
-[![tests](https://img.shields.io/badge/tests-19%20suites%20PASS-brightgreen.svg)]()
+[![tests](https://img.shields.io/badge/tests-24%20suites%20PASS-brightgreen.svg)]()
 
 </div>
 
@@ -101,7 +101,7 @@ Open `http://localhost:8501`. The 3D spacecraft CAD loads inside the dashboard; 
 
 | Variable | Effect |
 |---|---|
-| `MISSIONMIND_PHYSICS_SPEC=1` | Swaps `mc_p=2000 J/K -> 5000 J/K` and `r_final=0.10 -> 0.30` per spec §3-§5. Default off for demo speed. |
+| `MISSIONMIND_DEMO_FAST=1` | Opts into the legacy demo-tuned constants (`mc_p=2000 J/K`, exaggerated 10% radiator fault). **Default is the physically justified spec values** (`mc_p=5000 J/K`, `r_final=0.30`); the demo values are labelled controlled injected faults, not nominal physics. |
 | `WATSONX_APIKEY`, `WATSONX_PROJECT_ID` | Real `ibm/granite-3-2b-instruct` call instead of the deterministic mock fallback. |
 | `WATSONX_MODEL_ID` | Defaults to `ibm/granite-3-2b-instruct`; any model ID on watsonx.ai works. |
 
@@ -140,9 +140,11 @@ One telemetry sample through the whole stack:
                                   |                |                  |
                 -------------------+----------------+-----------------+
                 v run_scenario()   v solver (RK4-equivalent Euler)    v physics rules
-       power load = 400 W     dSOC/dt = (net) / 3600 / 100        solar_drop : P < 364 ?
-       solar = 520 W (env)     dT/dt   = (Q_in - Q_out) / mc_p     soc_slope : dSOC/dt < -0.0002
-       bus V = 28 V @ SOC=1    eps_A    = e * A                   temp_slope: dT/dt > 0.003
+       power load = 400 W     dSOC/dt = (net) / 3600 / 100        solar residual : solar - P_max*sun_exp ?
+       solar = 520 W * sun_exp (eclipse-coupled)
+                                dT/dt   = (Q_in - Q_out) / mc_p     heat-rejection residual
+       bus V = 28 V @ SOC=1    eps_A    = e * A                   soc/UVLO policy: safe mode @20%,
+       battery policy: UVLO trip @SOC 0, load shed, hysteresis     bus off below SOC 0 (energy-conserving)
                                   |                |                  |
                 -------------------+----------------+-----------------+
                 v add_derivative_features(df)   score_dataframe()    v physics_rules.*
@@ -312,7 +314,8 @@ If `WATSONX_APIKEY` is not set, the sidebar shows `API Key: missing (mock fallba
 
 Implemented:
 
-- **Energy-conserving ODE**: `dSOC/dt = (P_solar - P_load) / (E_cap_Wh * 3600)`; `dT/dt = (Q_in - Q_out) / mc_p`, with `mc_p` and `r_final` toggled per spec on demand.
+- **Energy-conserving EPS**: `dSOC/dt = (P_solar*deg*sun_exposure - P_load) / (E_cap_Wh * 3600)` — solar is coupled to the orbital eclipse state (umbra → ~0 W, smooth penumbra); the battery follows a first-order policy (safe mode below 20% SOC, bus trip at SOC 0, hysteresis recharge) so **no energy is ever consumed at SOC=0**.
+- **First-order LEO thermal environment**: direct solar, Earth albedo and Earth IR absorbed on the bus (eclipse-modulated) plus internal dissipation vs Stefan–Boltzmann rejection; `dT/dt = (Q_in - Q_out) / mc_p` with `mc_p` and `r_final` toggled per spec on demand.
 - **Fault injection**: solar degradation ramps `P_solar_max -> 0.48x` over `t = 600 -> 900 s`; radiator degradation ramps `e*A -> r_final * nominal`.
 - **Real IBM satellite CAD** (`satellite_geometry.js`): part-level fault animation, solar arrays dim + pulse on PV failure, main bus glows on radiator failure.
 - **Detector / physics-rule co-design**: every flagged row is visible in the alert card with the exact feature column that drove the flag.
@@ -347,7 +350,7 @@ missionmind/
 |   |-- frame.py            wire schema (identical to run_scenarios output)
 |   +-- run_edge_demo.py    CLI demo: stream 1000 frames through the ensemble
 |
-|-- physics_rules/          Spec section 6 rule checks (solar_drop + soc_slope, temp_rising)
+|-- physics_rules/          Spec section 6 rule checks (eclipse-aware solar residual, heat-rejection residual)
 |   +-- rules.py            check_power_subsystem, check_thermal_subsystem
 |
 |-- ml/                     detector zoo + scoring + audit infrastructure
@@ -380,7 +383,7 @@ web/                        React 19 + Vite + Tailwind v4 + shadcn/ui mission-co
 ## Testing
 
 ```bash
-# 19 regression suites (TDD) - run them all with pytest:
+# 24 regression suites (TDD) - run them all with pytest:
 pytest
 
 # or one at a time, e.g.:
@@ -452,7 +455,7 @@ Fresh-checkout behaviour:
 - Ensemble coherence under inspector (flag=1 implies score<0 by construction)
 - 4-line causal narrative (WARN -> SUBSYSTEM -> EVIDENCE -> ACTION)
 - Granite client + RAG integrated with honest mock fallback
-- Real Kepler propagator: analytical two-body + conical shadow eclipse in the runtime telemetry; numerical extension point (RK4 / adaptive DOPRI5 / J2) validated but not wired into the power solve (see `missionmind/docs/ORBITAL_PROPAGATION.md`)
+- Real Kepler propagator: analytical two-body + conical shadow eclipse in the runtime telemetry; the eclipse state is coupled into the power/battery/thermal solve (one source of truth drives orbital telemetry, solar power, battery and the rules layer), with a validated numerical extension point (RK4 / adaptive DOPRI5 / J2) for perturbed runs (see `missionmind/docs/ORBITAL_PROPAGATION.md`)
 - Live telemetry ingest: virtual IoT edge node -> TCP/MQTT -> live ensemble scoring (`missionmind/telemetry/`)
 - Session persistence: dashboard resumes at last-viewed scenario/time after restart, plus login auto-start (`scripts/install_autostart.ps1`)
 - PINN vs PGNN result disclosed on disk and in this README
@@ -463,7 +466,7 @@ Fresh-checkout behaviour:
 
 PRs welcome. The two highest-leverage follow-ups:
 
-1. Wire the eclipse illumination into the power/battery solve (the rules layer already consumes `in_eclipse`; the nominal power envelope is still constant-illumination by design, documented in `missionmind/docs/ORBITAL_PROPAGATION.md`).
+1. Higher-fidelity perturbed propagation in the runtime solve (J2/drag are validated in `simulator/propagation.py` but the live telemetry still uses the analytical two-body baseline).
 2. Physical edge hardware: an ESP32/RPi running the same JSON-lines wire format the virtual node publishes, replacing `VirtualEdgeNode` in `run_edge_demo.py`.
 
 Both are tracked in `CHANGES.md` with risk / impact / effort annotations.
