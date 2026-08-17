@@ -84,14 +84,34 @@ target-local fade-rate adaptation. Relative accuracy ≈ 8–20% of battery life
 
 ### Orbital tie-in (the one equation that matters here)
 
-Battery RUL is in **cycles**. In orbit, one eclipse per orbit drives one
-charge/discharge cycle, so cycles convert to calendar time with Kepler's period:
+Battery RUL is in **equivalent full cycles (EFC)** — the same cycle definition
+as the EPS battery model: each discharge step adds its fractional depth to a
+running counter (`equivalent_full_cycles_from_soc`, the standard battery-aging
+"equivalent full cycle" convention; two 50% discharges = 1.0 EFC). EFC converts
+to calendar time with Kepler's period and the EPS-measured per-orbit cycle rate:
 
 ```
 T = 2·pi·sqrt(a^3 / mu)      mu_earth = 3.986004418e14 m^3/s^2
+days = EFC / efc_per_orbit · T / 86400
 ```
 
-E.g. 550 km LEO → period 95.5 min → 15.08 orbits/day → **50 cycles ≈ 3.3 days**.
+We do **not** assume "one eclipse = one full cycle". `efc_per_orbit` is measured
+from the actual EPS SOC series (`data/run_normal.csv`): with the corrected
+physics (400 W load, 100 Wh pack, bus-trip policy at SOC 0) the reference
+scenario accumulates **1.59 EFC/orbit**, not 1.0 — the pack drains to bus-trip
+in every eclipse and partially discharges again after recharge. Consequences
+for the same 50 EFC of fade:
+
+| Conversion | EFC/orbit | 50 EFC → days (550 km) |
+|---|---|---|
+| Old assumption (one eclipse = one full cycle) | 1.0 | ~3.3 days |
+| Corrected (measured from EPS SOC) | 1.592 | ~2.1 days |
+
+So the corrected model predicts **~37% faster calendar-time degradation** than
+the old assumption, and this number is now tied to what the EPS actually
+produces. When no simulated SOC series is available, `cycles_to_days` falls back
+to a first-principles estimate (eclipse energy deficit / usable capacity,
+capped at 1.0) and labels it an estimate.
 
 ## 3. Second NASA dataset — C-MAPSS turbofan RUL (`missionmind/ml/cmapss_rul.py`)
 
