@@ -493,7 +493,7 @@ def live_next(mode: str = "solar_degradation", n: int = 30):
     # scoring only ever reads the last LIVE_RETAIN frames anyway
     LIVE_RETAIN = 600
     del buf[:-LIVE_RETAIN]
-    return {"mode": mode, "frames": frames, "total": node._frame_id,
+    return {"mode": mode, "frames": frames, "total": node.sample_seq,
             "retained": len(buf), "window_scored": len(buf) >= 30,
             "anomaly_score": score, "anomaly_flag": flag,
             "anomaly_source": source}
