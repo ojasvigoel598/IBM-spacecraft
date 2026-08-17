@@ -17,11 +17,20 @@ from missionmind.ml.adaptive import decide  # noqa: E402
 
 
 def _eclipse_window():
-    """Deterministic eclipse window: in-eclipse telemetry with low solar."""
+    """Deterministic eclipse window: in-eclipse telemetry with low solar.
+
+    P10: the window must be PHYSICALLY CONSISTENT - a device in eclipse has
+    sun_exposure ~ 0 (the Sun's disk is occulted), which is what makes the
+    low solar power *explained* by orbital geometry. Forcing in_eclipse=1
+    while leaving sun_exposure at the sunlit value would make the residual
+    check correctly report eclipse_plus_fault (measured 10 W vs expected
+    520 W*sun_exposure is a genuine fault signature in sunlight).
+    """
     df = run_scenario(failure_mode="none", duration_s=120, add_orbit=True)
     win = df.head(40).copy()
     win["solar_power_w"] = 10.0
     win["in_eclipse"] = 1
+    win["sun_exposure"] = 0.0
     return win
 
 
