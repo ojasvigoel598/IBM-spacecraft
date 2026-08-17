@@ -25,7 +25,11 @@ TELEMETRY_SCHEMA = [
     "failure_mode",
 ]
 
-SCHEMA_VERSION = "1.0"
+# 1.1 adds the device header fields a constrained edge device actually
+# publishes (device_state, sensor_ok, uptime_s). from_json_line tolerates
+# payloads without them (older devices / the simulator), so the wire format
+# stays backward compatible.
+SCHEMA_VERSION = "1.1"
 
 
 @dataclass
@@ -42,6 +46,11 @@ class TelemetryFrame:
     frame_id: int = 0
     source: str = "virtual-edge-01"
     schema_version: str = SCHEMA_VERSION
+    # Device header (schema 1.1): what a real ESP32/RPi would publish on the
+    # wire so the sink can see device health, not just sensor values.
+    device_state: str = "nominal"   # boot | nominal | sensor_fault | recovery | rebooting
+    sensor_ok: int = 1              # 0 = >=1 channel stale (sensor dropout)
+    uptime_s: float = 0.0           # seconds since the last boot
 
     def to_dict(self) -> Dict:
         return asdict(self)
