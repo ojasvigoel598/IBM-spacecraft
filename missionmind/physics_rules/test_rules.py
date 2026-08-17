@@ -44,12 +44,34 @@ def test_rules():
 
     print("=== Testing on run_solar_failure.csv ===")
     df_s, findings_s = evaluate_on_csv(solar_csv)
-    # After 900s should flag solar degradation mostly
+    # After 900s should flag solar degradation in every window where the
+    # fault is PHYSICALLY OBSERVABLE. With eclipse-coupled physics the power
+    # rule correctly declines eclipse-dominated windows (the dip is expected
+    # orbital geometry, not a fault), so the old flat ">50% of all windows"
+    # gate is replaced by an illumination-aware one: ~all sunlight windows
+    # must flag, and eclipse windows must stay quiet.
     after_900 = [(t,p,th) for t,p,th in findings_s if t>900]
-    power_after = [p for t,p,th in after_900 if p and p[0]=='solar_degradation']
-    print(f"Solar failure after 900s: {len(power_after)}/{len(after_900)} flagged solar")
-    # Should flag >50% after injection
-    assert len(power_after) >= len(after_900)*0.5, "Should flag solar_degradation after t≈900s"
+    # classify each window the same way the rule itself does: by the MEAN of
+    # in_eclipse over the 120 s window (the rule declines windows whose mean
+    # is >0.5 eclipse), not by the single sample at t.
+    ws = 120
+    sun_windows = []
+    ecl_windows = []
+    for t, p, th in after_900:
+        window = df_s.iloc[max(0, t-ws):t+1]
+        if float(window['in_eclipse'].astype(float).mean()) < 0.5:
+            sun_windows.append((t, p, th))
+        else:
+            ecl_windows.append((t, p, th))
+    power_after_sun = [p for t,p,th in sun_windows if p and p[0]=='solar_degradation']
+    power_after_ecl = [p for t,p,th in ecl_windows if p]
+    print(f"Solar failure after 900s: {len(power_after_sun)}/{len(sun_windows)} flagged in sunlight, "
+          f"{len(power_after_ecl)}/{len(ecl_windows)} flagged in eclipse (expected 0)")
+    if len(sun_windows) > 0:
+        assert len(power_after_sun) >= len(sun_windows)*0.9, (
+            f"Should flag solar_degradation in sunlight after t≈900s, "
+            f"got {len(power_after_sun)}/{len(sun_windows)}")
+    assert len(power_after_ecl) == 0, f"Eclipse must not be flagged as solar_degradation, got {power_after_ecl}"
     # Before 600s should not flag
     before_600 = [(t,p,th) for t,p,th in findings_s if t<500]
     power_before = [p for t,p,th in before_600 if p]

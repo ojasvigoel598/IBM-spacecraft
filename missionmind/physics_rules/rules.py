@@ -18,6 +18,9 @@ from missionmind.simulator.config import (
     SOC_SLOPE_THRESHOLD_TUNED,
     TEMP_SLOPE_THRESHOLD_SPEC,
     TEMP_SLOPE_THRESHOLD_TUNED,
+    EPSILON_A_NOMINAL,
+    SIGMA,
+    T_SPACE_K,
 )
 
 # Log both for audit
@@ -81,6 +84,16 @@ def check_power_subsystem(window: pd.DataFrame):
     if window is None or len(window) < 10:
         return None
 
+    # P9: an eclipse-driven solar drop is EXPECTED physics, not a fault - the
+    # eclipse rule (check_eclipse) explains it. Without this guard the power
+    # rule would fire 'solar_degradation' on every nominal eclipse pass.
+    if "in_eclipse" in window.columns:
+        try:
+            if float(window["in_eclipse"].astype(float).mean()) > 0.5:
+                return None
+        except Exception:  # noqa: BLE001
+            pass
+
     solar_mean = window["solar_power_w"].mean()
     solar_drop = solar_mean < 0.7 * P_SOLAR_MAX
 
@@ -111,80 +124,149 @@ def check_power_subsystem(window: pd.DataFrame):
         pass
     return None
 
-def check_thermal_subsystem(window: pd.DataFrame):
-    """
-    temp_rising = slope(temperature_c) > 0.01 C/s
-    heat_in_stable = abs(slope(heat_in_w)) < 1.0 W/s ~flat
-    If both => radiator_degradation
+def thermal_rejection_residual(window: pd.DataFrame):
+    """Radiator-health diagnostic: measured heat rejection minus the
+    Stefan-Boltzmann expectation for a NOMINAL radiator at the measured
+    temperature.
 
-    NOTE: With spec constants, Q_in=60W, epsilon*A degraded 0.1275, at 250K Q_out~28W,
-    net 32W, dT=0.0064 K/s <0.01 threshold. So threshold too strict. Tune to 0.003
-    to match physics. Also consider temp mean rising above nominal -23C benchmark.
+        expected_q_out = epsA_nominal * sigma * (T_mean^4 - T_space^4)
+        residual        = mean(heat_out_w) - expected_q_out
+
+    This is the physically correct radiator fault signature. A degraded
+    radiator reduces eps*A, so it rejects LESS heat at any given temperature
+    than the nominal product would - the residual goes strongly negative
+    regardless of whether the bus happens to be warming or cooling. The old
+    temperature-trend heuristic (temp_rising + heat_in_stable) could not tell
+    "bus legitimately warms from load/environment" apart from "radiator
+    degraded", so it fired on the environment-coupled nominal run (P10).
+    Returns (residual_w, expected_w) or None when heat_out_w is absent.
     """
     if window is None or len(window) < 10:
         return None
+    if "heat_out_w" not in window.columns:
+        return None
+    t_k = window["temperature_c"].astype(float) + 273.15
+    expected = float((EPSILON_A_NOMINAL * SIGMA * (t_k ** 4 - T_SPACE_K ** 4)).mean())
+    measured = float(window["heat_out_w"].astype(float).mean())
+    return measured - expected, expected
 
-    temp_slope = slope(window["temperature_c"].values, window["time_s"].values if "time_s" in window else None)
-    heat_in_slope = slope(window["heat_in_w"].values) if "heat_in_w" in window else 0.0
-    temp_mean = window["temperature_c"].mean()
 
-    temp_rising = temp_slope > TEMP_SLOPE_THRESHOLD_TUNED  # tuned from SPEC 0.01
-    heat_in_stable = abs(heat_in_slope) < 1.0
-    # Additional heuristic: if temp is significantly above nominal equilibrium -23C and rising
-    temp_high = temp_mean > -10 and temp_slope > -0.005  # not cooling fast
-
-    t_last = float(window["time_s"].iloc[-1]) if "time_s" in window else None
-    if (temp_rising and heat_in_stable) or (temp_high and heat_in_stable and temp_mean > 0):
-        conf = 0.6 + 0.3 * min(1.0, temp_slope/0.05 + (0.2 if temp_high else 0))
-        conf = float(np.clip(conf, 0.65, 0.95))
+def check_thermal_subsystem(window: pd.DataFrame):
+    """
+    radiator_degradation = measured heat rejection is substantially below the
+    nominal-radiator Stefan-Boltzmann expectation at the measured temperature
+    (thermal_rejection_residual << 0). Confidence scales with the fractional
+    deficit. The old SPEC heuristic (temp slope > 0.01 C/s + heat_in flat)
+    conflated legitimate warming with degradation, so it false-positived on
+    the environment-coupled nominal run; a rising bus with a HEALTHY radiator
+    still rejects heat at the nominal rate and produces ~0 residual.
+    """
+    res = thermal_rejection_residual(window)
+    if res is None:
+        return None
+    residual_w, expected_w = res
+    # tolerance: sensor noise on heat_out_w (P2-003 ~ +- a few W) plus a small
+    # margin; a degraded radiator (30% epsA) leaves a deficit far beyond this.
+    tol = max(8.0, 0.12 * expected_w)
+    if residual_w < -tol:
+        deficit = min(1.0, -residual_w / max(1.0, expected_w))
+        conf = float(np.clip(0.6 + 0.35 * deficit, 0.65, 0.95))
+        t_last = float(window["time_s"].iloc[-1]) if "time_s" in window else None
         try:
             from missionmind.trace import record
             record("physics_rules", "check_thermal_subsystem", mission_t=t_last,
-                   note=f"temp_rising ({temp_slope:.4f}C/s, mean {temp_mean:.1f}C) -> radiator_degradation",
+                   note=f"heat rejection {residual_w:+.1f}W vs nominal expectation "
+                        f"{expected_w:.0f}W (deficit {deficit:.0%}) -> radiator_degradation",
                    value=conf)
         except Exception:  # noqa: BLE001
             pass
         return ("radiator_degradation", round(conf, 2))
 
+    t_last = float(window["time_s"].iloc[-1]) if "time_s" in window else None
     try:
         from missionmind.trace import record
         record("physics_rules", "check_thermal_subsystem", mission_t=t_last,
-               note=f"no thermal rule hit (temp slope {temp_slope:.4f}C/s, mean {temp_mean:.1f}C)",
+               note=f"heat rejection {residual_w:+.1f}W vs nominal {expected_w:.0f}W "
+                    f"(residual within tolerance) - radiator healthy",
                value=None)
     except Exception:  # noqa: BLE001
         pass
     return None
 
-def check_eclipse(window: pd.DataFrame):
-    """P5-ORBIT: is a solar-power dip EXPLAINED by Kepler eclipse physics?
+def eclipse_residual(window: pd.DataFrame) -> dict:
+    """Residual of measured solar power vs the physically expected eclipse-
+    adjusted value (P_max * sun_exposure, assuming a nominal array).
 
-    When the satellite is in eclipse, solar power drops to ~0 W as a matter of
-    orbital geometry (not a fault). If the telemetry window shows the satellite
-    in eclipse AND solar power is low, this rule returns ('eclipse', conf) —
-    the physics EXPLANATION for a solar dip that an unsupervised ML detector
-    would otherwise flag as a solar-array fault.
-
-    The adaptive layer uses this to expose ML-vs-physics disagreement:
-    ML flag 'solar' + physics 'eclipse' = expected transient, not a fault.
+    This is the quantity that decides whether a solar dip is EXPLAINED by
+    orbital geometry or is a genuine fault:
+      * in eclipse and |residual| small  -> eclipse explains the dip
+      * in eclipse and residual << 0     -> degradation BEYOND the eclipse
+        (e.g. penumbra where a degraded array underproduces, or a fault that
+        persists when the Sun returns)
+      * not in eclipse                   -> the solar channel is unambiguous
+    Returns a dict (or None when the columns are absent).
     """
     if window is None or len(window) < 10:
         return None
-    if "in_eclipse" not in window.columns or "solar_power_w" not in window.columns:
+    need = ("solar_power_w", "in_eclipse", "sun_exposure")
+    if not all(c in window.columns for c in need):
         return None
-    eclipse_frac = float(window["in_eclipse"].mean())
-    solar_mean = float(window["solar_power_w"].mean())
-    if eclipse_frac > 0.5 and solar_mean < 0.7 * P_SOLAR_MAX:
-        t_last = float(window["time_s"].iloc[-1]) if "time_s" in window else None
-        conf = round(min(0.95, 0.6 + 0.3 * eclipse_frac), 2)
+    exposure = window["sun_exposure"].astype(float)
+    solar = window["solar_power_w"].astype(float)
+    eclipse_frac = float(window["in_eclipse"].astype(float).mean())
+    expected = float((P_SOLAR_MAX * exposure).mean())
+    measured = float(solar.mean())
+    residual = measured - expected
+    # tolerance: a nominal array matches the eclipse-adjusted expectation to
+    # within sensor noise (P2-003: +-2 W) plus a small margin. A real fault
+    # (degradation factor ~0.48) leaves a residual far beyond this.
+    tol = max(10.0, 0.15 * abs(expected))
+    if eclipse_frac > 0.5:
+        status = "eclipse" if residual > -tol else "eclipse_plus_fault"
+    else:
+        status = "full"
+    return {"expected_solar_w": expected, "measured_solar_w": measured,
+            "residual_w": residual, "eclipse_frac": eclipse_frac,
+            "in_eclipse": eclipse_frac > 0.5, "status": status}
+
+
+def check_eclipse(window: pd.DataFrame):
+    """Eclipse explanation rule (residual-based, P9).
+
+    Returns ('eclipse', conf) ONLY when the measured solar drop is consistent
+    with the eclipse-adjusted expectation (residual within tolerance) - i.e.
+    the ML flag is genuinely explained by orbital geometry. Returns
+    ('eclipse_plus_fault', conf) when the measured power is substantially
+    LOWER than the eclipse-adjusted value, so a real fault can never be
+    silently erased by an eclipse: the explanation only fires when the
+    physics supports it.
+    """
+    res = eclipse_residual(window)
+    if res is None or not res["in_eclipse"]:
+        return None
+    t_last = float(window["time_s"].iloc[-1]) if "time_s" in window else None
+    if res["status"] == "eclipse":
+        conf = round(min(0.95, 0.6 + 0.3 * res["eclipse_frac"]), 2)
         try:
             from missionmind.trace import record
             record("physics_rules", "check_eclipse", mission_t=t_last,
-                   note=f"in eclipse {eclipse_frac:.0%} with solar {solar_mean:.0f}W -> expected transient",
+                   note=f"in eclipse {res['eclipse_frac']:.0%}, solar {res['measured_solar_w']:.0f}W "
+                        f"vs expected {res['expected_solar_w']:.0f}W (residual {res['residual_w']:.1f}W) -> explained",
                    value=conf)
         except Exception:  # noqa: BLE001
             pass
         return ("eclipse", conf)
-    return None
+    # eclipse + measured solar substantially below expectation -> real fault
+    conf = round(min(0.97, 0.7 + 0.25 * min(1.0, -res["residual_w"] / max(1.0, res["expected_solar_w"]))), 2)
+    try:
+        from missionmind.trace import record
+        record("physics_rules", "check_eclipse", mission_t=t_last,
+               note=f"in eclipse but solar {res['measured_solar_w']:.0f}W << expected "
+                    f"{res['expected_solar_w']:.0f}W (residual {res['residual_w']:.1f}W) -> fault NOT explained",
+               value=conf)
+    except Exception:  # noqa: BLE001
+        pass
+    return ("eclipse_plus_fault", conf)
 
 
 def check_all_rules(window: pd.DataFrame):
