@@ -132,6 +132,110 @@ def test_eclipse_solar_factor_smooth():
                for t in range(0, 7000, 10))
 
 
+# --------------------------------------------------------------------------- #
+# PQW -> ECI frame-convention regression tests (independent reference).
+#
+# These pin the transformation against the PUBLISHED closed form of Bate,
+# Mueller & White (Fundamentals of Astrodynamics, Eq. 2.19/2.20) at NON-ZERO
+# RAAN / argument-of-perigee / inclination / eccentricity. The reference
+# orbit's symmetry (Omega=0, omega=0, circular) cannot hide a frame error
+# here: the closed form is computed independently from the project code and
+# the states must agree to ~machine precision at every random element set.
+# --------------------------------------------------------------------------- #
+
+def _bmw_closed_form(t, a, e, i_deg, raan_deg, argp_deg, nu0_deg=0.0):
+    """Independent implementation of the published Bate-Mueller-White
+    PQW->ECI closed form. Written from the textbook, not from this repo."""
+    mu = MU_EARTH
+    O, I, w = np.radians(raan_deg), np.radians(i_deg), np.radians(argp_deg)
+    # mean anomaly at epoch from the initial true anomaly (same epoch math
+    # as the code under test: E0 from nu0, then M0 = E0 - e*sin(E0))
+    E0 = 2 * np.arctan2(np.sqrt(1 - e) * np.sin(np.radians(nu0_deg) / 2),
+                        np.sqrt(1 + e) * np.cos(np.radians(nu0_deg) / 2))
+    M0 = (E0 - e * np.sin(E0)) % (2 * np.pi)
+    n = np.sqrt(mu / a ** 3)
+    M = (n * t + M0) % (2 * np.pi)
+    E = M
+    for _ in range(80):
+        d = (E - e * np.sin(E) - M) / (1 - e * np.cos(E))
+        E -= d
+        if abs(d) < 1e-14:
+            break
+    nu = 2 * np.arctan2(np.sqrt(1 + e) * np.sin(E / 2),
+                        np.sqrt(1 - e) * np.cos(E / 2))
+    p = a * (1 - e * e)
+    r = p / (1 + e * np.cos(nu))
+    u = w + nu
+    r_vec = np.array([
+        r * (np.cos(O) * np.cos(u) - np.sin(O) * np.sin(u) * np.cos(I)),
+        r * (np.sin(O) * np.cos(u) + np.cos(O) * np.sin(u) * np.cos(I)),
+        r * np.sin(u) * np.sin(I),
+    ])
+    v_scale = mu / np.sqrt(mu * p)
+    v_vec = np.array([
+        v_scale * (-np.cos(O) * (np.sin(u) + e * np.sin(w))
+                   - np.sin(O) * (np.cos(u) + e * np.cos(w)) * np.cos(I)),
+        v_scale * (-np.sin(O) * (np.sin(u) + e * np.sin(w))
+                   + np.cos(O) * (np.cos(u) + e * np.cos(w)) * np.cos(I)),
+        v_scale * (np.cos(u) + e * np.cos(w)) * np.sin(I),
+    ])
+    return r_vec, v_vec
+
+
+def test_pqw_to_eci_matches_published_closed_form():
+    """Regression: the 3D ECI state must match the published closed form at
+    non-zero RAAN / argument-of-perigee / inclination / eccentricity. A
+    frame-convention error cannot be hidden by the Omega=0, omega=0
+    symmetry of the reference orbit."""
+    rng = np.random.default_rng(11)
+    worst_r = worst_v = 0.0
+    for _ in range(60):
+        a = 6.7e6 + rng.uniform(0, 1.2e6)
+        e = rng.uniform(0.0, 0.5)
+        i = rng.uniform(10, 120)
+        raan = rng.uniform(-180, 180)
+        argp = rng.uniform(-180, 180)
+        nu0 = rng.uniform(0, 360)
+        t = rng.uniform(0, 40000)
+        r_code, v_code, _, _ = state_vectors_3d(
+            t, a=a, e=e, i_deg=i, raan_deg=raan, argp_deg=argp, nu0_deg=nu0)
+        r_ref, v_ref = _bmw_closed_form(t, a, e, i, raan, argp, nu0)
+        worst_r = max(worst_r, np.linalg.norm(r_code - r_ref) / np.linalg.norm(r_ref))
+        worst_v = max(worst_v, np.linalg.norm(v_code - v_ref) / np.linalg.norm(v_ref))
+    assert worst_r < 1e-9, f"ECI position deviates from published closed form: {worst_r:.2e}"
+    assert worst_v < 1e-9, f"ECI velocity deviates from published closed form: {worst_v:.2e}"
+
+
+def test_angular_momentum_direction_matches_elements():
+    """The orbit-normal direction must be h_hat = [sin(O)sin(i), -cos(O)sin(i),
+    cos(i)] in ECI for the standard prograde convention (checked at non-zero
+    RAAN and inclination, where a sign flip would be visible)."""
+    for i, raan in ((51.6, 0.0), (45.0, 40.0), (98.0, -33.0)):
+        r, v, _, _ = state_vectors_3d(1234.5, e=0.2, i_deg=i, raan_deg=raan,
+                                      argp_deg=25.0)
+        h = np.cross(r, v)
+        h = h / np.linalg.norm(h)
+        O, I = np.radians(raan), np.radians(i)
+        expect = np.array([np.sin(O) * np.sin(I), -np.cos(O) * np.sin(I), np.cos(I)])
+        assert np.allclose(h, expect, atol=1e-9), (i, raan, h, expect)
+
+
+def test_polar_orbit_geometry_physical():
+    """Physical orientation test: a polar prograde orbit (i=90, Omega=0,
+    omega=0) at true anomaly 90 deg must place the satellite at the NORTH
+    pole ([0, 0, +a]) — a mirror/reflection convention error would send it
+    to the south pole."""
+    a = REF_SEMI_MAJOR
+    for nu0 in (0.0, 90.0):
+        r, v, nu, _ = state_vectors_3d(
+            0.0, a=a, e=0.0, i_deg=90.0, raan_deg=0.0, argp_deg=0.0, nu0_deg=nu0)
+        if nu0 == 90.0:
+            assert abs(r[2] - a) < 1e-6, f"polar orbit at nu=90 must be at +z: {r}"
+            assert abs(r[0]) < 1e-6 and abs(r[1]) < 1e-6
+        else:
+            assert abs(r[0] - a) < 1e-6  # nu=0 -> ascending node on +x
+
+
 def test_orbit_columns_schema():
     cols = orbit_columns(60.0)
     for k in ("orbit_angle_deg", "mean_anomaly_deg", "orbit_period_s",
