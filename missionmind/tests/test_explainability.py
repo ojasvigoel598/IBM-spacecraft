@@ -19,10 +19,10 @@ DATA = os.path.join(os.path.dirname(__file__), "..", "data")
 def test_explain_row_solar_failure_top_driver():
     df = pd.read_csv(os.path.join(DATA, "run_solar_failure.csv")).head(1500)
     expl = explain_row(df, row_idx=-1)
-    assert len(expl["features"]) == 5, "must return all 5 model features"
+    assert len(expl["features"]) == 7, "must return all 7 full-model features"
     assert expl["anomalous"] is True, "at t=1499s the solar fault is active"
     top = expl["features"][0]["name"]
-    assert top in ("solar_power_w", "d_volt_dt", "battery_voltage_v"), \
+    assert top in ("solar_power_w", "d_volt_dt", "battery_voltage_v", "solar_residual_w"), \
         f"top driver {top} should be a power-side signal"
     # attributions must be finite and sorted by |attribution|
     abs_attrs = [abs(f["attribution"]) for f in expl["features"]]
@@ -32,7 +32,7 @@ def test_explain_row_solar_failure_top_driver():
 def test_explain_row_normal_low_risk():
     df = pd.read_csv(os.path.join(DATA, "run_normal.csv")).head(200)
     expl = explain_row(df, row_idx=-1)
-    assert len(expl["features"]) == 5
+    assert len(expl["features"]) == 7
     # nominal telemetry: score should be >= 0 (not anomalous)
     assert expl["anomalous"] is False
 
