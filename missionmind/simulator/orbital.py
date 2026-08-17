@@ -97,7 +97,15 @@ def true_anomaly_from_E(E: float, e: float) -> float:
 
 
 def _pqw_to_eci(i_deg: float, raan_deg: float, argp_deg: float) -> np.ndarray:
-    """Perifocal (PQW) to ECI rotation matrix: R = Rz(-Omega) Rx(-i) Rz(-omega)."""
+    """Perifocal (PQW) to ECI rotation matrix.
+
+    Implements the PUBLISHED Bate-Mueller-White closed form (Fundamentals of
+    Astrodynamics, Eq. 2.19/2.20) directly, element by element. This is the
+    standard prograde convention: at Omega=0, omega=0 the orbit normal is
+    h_hat = [0, -sin(i), cos(i)] and a polar orbit at true anomaly 90 deg sits
+    at the north pole. Verified against the independent closed form at random
+    non-zero (Omega, i, omega, e) in tests/test_orbital.py.
+    """
     O = np.radians(raan_deg)
     I = np.radians(i_deg)
     w = np.radians(argp_deg)
