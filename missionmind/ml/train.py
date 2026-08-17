@@ -121,6 +121,18 @@ def record_dataset_manifest(X_full, X_power, X_thermal) -> dict:
         "features_full": FEATURE_COLS + ["d_temp_dt", "d_volt_dt"],
         "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ"),
     }
+    # Preserve the committed manifest when the dataset is UNCHANGED: a rebuild
+    # must not churn generated_at_utc (phantom diff, CI noise). Only a genuine
+    # dataset change rewrites the file, and that change is exactly what the CI
+    # dataset check is designed to catch.
+    if os.path.exists(DATASET_SIDECAR):
+        try:
+            with open(DATASET_SIDECAR, encoding="utf-8") as f:
+                old = json.load(f)
+            if old.get("dataset_id") == manifest["dataset_id"]:
+                return old
+        except Exception:
+            pass
     os.makedirs(MODEL_DIR, exist_ok=True)
     with open(DATASET_SIDECAR, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
