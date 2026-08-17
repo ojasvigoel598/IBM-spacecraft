@@ -66,6 +66,21 @@ def load_training_data():
     df = add_derivative_features(df)
     return df
 
+
+def generate_training_data():
+    """Generate the canonical noisy nominal run the detectors are trained on.
+
+    Uses the simulator's P2-003 sensor-noise mode (2 W solar / 0.01 V / 0.1 C,
+    seeded RNG 0) - the same convention as the live telemetry path
+    (telemetry/edge_node.py). Training on the noisy nominal envelope instead of
+    the clean CSV is what keeps the fitted detectors quiet on nominal live
+    telemetry while still catching injected faults; it also makes retraining
+    self-contained and reproducible on any checkout.
+    """
+    from missionmind.simulator.run_scenarios import run_scenario
+    df = run_scenario(failure_mode="none", duration_s=3600, add_noise=True)
+    return add_derivative_features(df)
+
 def build_feature_matrix(df: pd.DataFrame):
     cols = FEATURE_COLS + ["d_temp_dt", "d_volt_dt"]
     X = df[cols].values
@@ -89,8 +104,8 @@ def train():
               "rebuild (and commit the new models) deliberately.")
         return
     os.makedirs(MODEL_DIR, exist_ok=True)
-    print("[train] Loading normal data")
-    df = load_training_data()
+    print("[train] Generating noisy nominal training data (P2-003 sensor noise)")
+    df = generate_training_data()
     X_full, feature_names_full = build_feature_matrix(df)
     X_power, feature_names_power = build_power_features(df)
     X_thermal, feature_names_thermal = build_thermal_features(df)
@@ -98,22 +113,33 @@ def train():
     print(f"[train] X_full shape {X_full.shape}, features {feature_names_full}")
     print(f"[train] Raw std full: {X_full.std(axis=0)}")
 
-    # P2-002 FIX: Document sensor noise model and extend to other near-constant cols
-    # Previously added noise only to constant solar (std=0) because IsolationForest cannot split on constant feature (min==max)
-    # Now documented as realistic sensor noise: solar measurement ±1W Gaussian, voltage ±0.01V, etc.
-    # Seed fixed 42 for reproducibility per L. Reproducibility assessment
+    # Sensor-noise model: match the simulator's P2-003 convention used by the
+    # live telemetry path (telemetry/edge_node.py): solar ±2 W, voltage ±0.01 V,
+    # temperature ±0.1 C. The derivative features inherit the temperature and
+    # voltage sensor noise per 1 s cadence. Previously the injected noise was
+    # far smaller than the live stream's real variation, which made the fitted
+    # detectors hypersensitive on nominal live telemetry (high false-flag rate
+    # on VirtualEdgeNode data). Seed fixed 42 for reproducibility.
+    SENSOR_NOISE = {
+        "solar_power_w": 2.0,       # P2-003: 2 W
+        "battery_voltage_v": 0.01,  # P2-003: 0.01 V
+        "d_volt_dt": 0.01,          # voltage noise at 1 s cadence
+        "d_temp_dt": 0.1,           # temperature noise at 1 s cadence
+    }
     rng = np.random.default_rng(42)
     def add_noise_if_constant(X, names):
         Xn = X.copy()
         for idx in range(X.shape[1]):
+            name = names[idx]
             std = X[:, idx].std()
+            sigma = SENSOR_NOISE.get(name, 0.0)
             if std < 1e-6:
-                Xn[:, idx] += rng.normal(0, 1.0, size=X.shape[0])  # 1W sensor noise for solar
-                print(f"[train] Added noise to constant feature {names[idx]} (std {std}) as sensor noise model ±1W")
-            elif std < 0.1:
-                # Near-constant (e.g., voltage after plateau) add small noise 0.01V
-                Xn[:, idx] += rng.normal(0, 0.01, size=X.shape[0])
-                print(f"[train] Added small noise to near-constant {names[idx]} (std {std:.4f}) as sensor noise ±0.01V")
+                sigma = sigma or 1.0
+                Xn[:, idx] += rng.normal(0, sigma, size=X.shape[0])
+                print(f"[train] Added noise to constant feature {name} (std {std}) as sensor noise model ±{sigma}")
+            elif std < 0.1 and sigma > 0.0:
+                Xn[:, idx] += rng.normal(0, sigma, size=X.shape[0])
+                print(f"[train] Added small noise to near-constant {name} (std {std:.4f}) as sensor noise ±{sigma}")
         return Xn
 
     X_full_noisy = add_noise_if_constant(X_full, feature_names_full)
