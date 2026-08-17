@@ -26,10 +26,12 @@ TELEMETRY_SCHEMA = [
 ]
 
 # 1.1 adds the device header fields a constrained edge device actually
-# publishes (device_state, sensor_ok, uptime_s). from_json_line tolerates
-# payloads without them (older devices / the simulator), so the wire format
-# stays backward compatible.
-SCHEMA_VERSION = "1.1"
+# publishes (device_state, sensor_ok, uptime_s). 1.2 adds the orbital
+# illumination state (in_eclipse, sun_exposure) and battery policy state
+# (bus_state) so the LIVE path carries the same eclipse physics as the
+# simulator - one source of truth. from_json_line tolerates payloads without
+# them (older devices), so the wire format stays backward compatible.
+SCHEMA_VERSION = "1.2"
 
 
 @dataclass
@@ -51,6 +53,11 @@ class TelemetryFrame:
     device_state: str = "nominal"   # boot | nominal | sensor_fault | recovery | rebooting
     sensor_ok: int = 1              # 0 = >=1 channel stale (sensor dropout)
     uptime_s: float = 0.0           # seconds since the last boot
+    # Orbital illumination + battery policy state (schema 1.2): the same
+    # eclipse physics that drives the simulator power/thermal models.
+    in_eclipse: int = 0             # 1 = umbra or penumbra
+    sun_exposure: float = 1.0       # 0..1 fraction of the Sun's disk visible
+    bus_state: str = "normal"       # normal | safe_mode | off
 
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -68,6 +75,14 @@ class TelemetryFrame:
         return cls(**payload)
 
     def to_dataframe_row(self) -> Dict:
-        """Dict with exactly the telemetry-schema keys (DataFrame-compatible)."""
+        """Dict with the telemetry-schema keys plus the device/orbit header
+        fields (DataFrame-compatible - consumers select columns by name, so
+        the extras are inert to scoring but let the eclipse-aware rules and
+        LiveScorer see the same physics the simulator uses)."""
         d = asdict(self)
-        return {k: d[k] for k in TELEMETRY_SCHEMA}
+        row = {k: d[k] for k in TELEMETRY_SCHEMA}
+        for k in ("in_eclipse", "sun_exposure", "bus_state",
+                  "device_state", "sensor_ok"):
+            if k in d:
+                row[k] = d[k]
+        return row

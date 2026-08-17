@@ -49,8 +49,9 @@ from typing import Dict, Iterator, Optional
 import numpy as np
 
 from missionmind.simulator.config import SOC_0, T0_K, DT_S
-from missionmind.simulator.power import compute_power_step
-from missionmind.simulator.thermal import compute_thermal_step, Q_IN_NOMINAL
+from missionmind.simulator.power import compute_power_step, BUS_NORMAL
+from missionmind.simulator.thermal import compute_thermal_step, Q_IN_NOMINAL, ETA
+from missionmind.simulator.orbital import orbit_columns
 from missionmind.simulator.failures import (
     get_solar_degradation, get_radiator_effective_epsilon_area,
 )
@@ -199,6 +200,7 @@ class VirtualEdgeNode(EdgeDevice):
         self._recovery_until = None        # transient recovery state
         self._last_good = {c: None for c in SAMPLED_CHANNELS}
         self._fault_active = False
+        self._bus_state = BUS_NORMAL       # battery policy state (normal|safe_mode|off)
 
     # -- device-level sampling helpers ------------------------------------- #
 
@@ -226,6 +228,7 @@ class VirtualEdgeNode(EdgeDevice):
         self._reboots += 1
         self._sample_seq = 0        # a real device restarts its sample counter
         self._recovery_until = None
+        self._bus_state = BUS_NORMAL  # the battery policy state machine resets on boot
 
     # -- device state -------------------------------------------------------- #
 
@@ -266,16 +269,25 @@ class VirtualEdgeNode(EdgeDevice):
         frame_id = self._sample_seq   # sequence counts samples, incl. drops
         self._sample_seq += 1
 
-        # power side
-        deg_factor = get_solar_degradation(t, self.failure_mode)
-        solar_w, load_w, soc_new, voltage_v, _net_w = compute_power_step(
-            t, self.soc, deg_factor)
+        # P7: the SAME orbital illumination drives the power and thermal
+        # models of the edge device (one source of truth for eclipse).
+        orb = orbit_columns(t)
+        sun_exposure = orb["sun_exposure"]
 
-        # thermal side
+        # power side (eclipse-coupled, energy-conserving battery policy)
+        deg_factor = get_solar_degradation(t, self.failure_mode)
+        solar_w, load_w, soc_new, voltage_v, _net_w, self._bus_state = \
+            compute_power_step(t, self.soc, deg_factor,
+                               sun_exposure=sun_exposure,
+                               bus_state=self._bus_state)
+
+        # thermal side: internal dissipation follows the actual bus load;
+        # first-order LEO environment scaled by the same sun_exposure
         eps_eff, area_eff, _epsA = get_radiator_effective_epsilon_area(
             t, self.failure_mode)
         t_new, q_in, q_out, _dT = compute_thermal_step(
-            t, self.t_k, eps_eff, area_eff, q_in=Q_IN_NOMINAL)
+            t, self.t_k, eps_eff, area_eff,
+            q_in=load_w * (1.0 - ETA), sun_exposure=sun_exposure)
 
         # sensor noise (P2-003 convention: 2 W / 0.01 V / 0.1 C)
         if self.noise:
@@ -353,6 +365,9 @@ class VirtualEdgeNode(EdgeDevice):
             device_state=state,
             sensor_ok=0 if self._fault_active else 1,
             uptime_s=round(up, 3),
+            in_eclipse=int(orb["in_eclipse"]),
+            sun_exposure=round(float(sun_exposure), 4),
+            bus_state=self._bus_state,
         )
 
     def _advance_clock(self) -> None:
