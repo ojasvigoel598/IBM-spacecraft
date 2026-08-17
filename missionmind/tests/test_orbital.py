@@ -10,6 +10,7 @@ import os
 import sys
 
 import numpy as np
+import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -17,7 +18,8 @@ from missionmind.simulator.orbital import (
     orbital_period_s, kepler_solve, true_anomaly_from_E, state_vectors,
     state_vectors_3d, eclipse_geometry, in_eclipse,
     eclipse_fraction_over_window, orbital_energy_and_angular_momentum,
-    orbit_columns, eclipse_solar_factor, MU_EARTH, REF_SEMI_MAJOR, SUN_DIR,
+    orbit_columns, eclipse_solar_factor, MU_EARTH, R_EARTH, REF_SEMI_MAJOR,
+    SUN_DIR,
 )
 
 
@@ -250,11 +252,96 @@ def test_orbit_columns_schema():
     assert (cols["in_eclipse"] == 1) == (cols["eclipse_state"] != "full")
 
 
+# --------------------------------------------------------------------------- #
+# Edge-case hardening: degenerate inputs must fail explicitly, never produce
+# NaN / division-by-zero / silently wrong iterates. High-e Kepler cases must
+# still converge (Vallado start guess E0=pi for e>=0.8).
+# --------------------------------------------------------------------------- #
+
+def test_kepler_high_eccentricity_converges():
+    """e -> 1 Kepler cases converge for every mean anomaly, including the
+    hard M near 0 (where f' -> 1-e makes Newton slow)."""
+    for e in (0.9, 0.99, 0.999):
+        for M in (0.0, 1e-6, 0.01, 1.0, np.pi, 4.0, 2 * np.pi - 1e-6):
+            E = kepler_solve(M, e)
+            residual = abs((E - e * np.sin(E)) - M % (2 * np.pi))
+            assert residual < 1e-9, f"residual {residual:.2e} at e={e}, M={M}"
+
+
+def test_kepler_rejects_parabolic_and_hyperbolic():
+    """e >= 1 is outside the elliptic two-body domain: fail loudly."""
+    for e in (1.0, 1.5, -0.1):
+        with pytest.raises(ValueError):
+            kepler_solve(1.0, e)
+
+
+def test_kepler_rejects_nonfinite_mean_anomaly():
+    with pytest.raises(ValueError):
+        kepler_solve(float("nan"), 0.5)
+
+
+def test_state_vectors_reject_degenerate_elements():
+    """a <= 0, e outside [0,1), mu <= 0 must raise, not produce NaN."""
+    with pytest.raises(ValueError):
+        state_vectors_3d(0.0, a=-1.0)
+    with pytest.raises(ValueError):
+        state_vectors_3d(0.0, a=0.0)
+    with pytest.raises(ValueError):
+        state_vectors_3d(0.0, e=1.0)
+    with pytest.raises(ValueError):
+        state_vectors_3d(0.0, e=1.2)
+    with pytest.raises(ValueError):
+        state_vectors_3d(0.0, e=-0.5)
+    with pytest.raises(ValueError):
+        state_vectors_3d(0.0, mu=-1.0)
+    with pytest.raises(ValueError):
+        state_vectors_3d(float("nan"))
+
+
+def test_orbital_period_rejects_unphysical_a():
+    with pytest.raises(ValueError):
+        orbital_period_s(0.0)
+    with pytest.raises(ValueError):
+        orbital_period_s(-6.9e6)
+
+
+def test_eclipse_geometry_rejects_degenerate_position():
+    with pytest.raises(ValueError):
+        eclipse_geometry(np.zeros(3))
+    with pytest.raises(ValueError):
+        eclipse_geometry(np.array([np.nan, 1.0, 0.0]))
+
+
+def test_high_eccentricity_energy_conserved_and_period_closes():
+    """At e = 0.6 (a = 2 R_earth, a well-defined ellipse with perigee 0.8 R)
+    the two-body energy is conserved along the arc and equals -mu/(2a), and
+    the state closes after one Keplerian period."""
+    a = 2.0 * R_EARTH
+    e = 0.6
+    T = orbital_period_s(a)
+    r0, v0, _, _ = state_vectors_3d(0.0, a=a, e=e)
+    eps0 = np.linalg.norm(v0) ** 2 / 2 - MU_EARTH / np.linalg.norm(r0)
+    for t in (123.4, 1234.5, T * 0.5):
+        r, v, _, _ = state_vectors_3d(t, a=a, e=e)
+        eps = np.linalg.norm(v) ** 2 / 2 - MU_EARTH / np.linalg.norm(r)
+        assert abs(eps - eps0) < 1e-6, f"energy drift at e=0.6, t={t}"
+        assert abs(eps - (-MU_EARTH / (2.0 * a))) < 1e-3
+    r1, v1, _, _ = state_vectors_3d(T, a=a, e=e)
+    assert np.linalg.norm(r1 - r0) < 1e-6 and np.linalg.norm(v1 - v0) < 1e-6
+
+
 if __name__ == "__main__":
     for fn in (test_kepler_period_550km, test_kepler_equation_solve,
                test_true_anomaly_identity, test_eclipse_fraction_realistic,
                test_eclipse_cycle_deterministic, test_energy_conservation,
-               test_orbit_columns_schema):
+               test_orbit_columns_schema,
+               test_kepler_high_eccentricity_converges,
+               test_kepler_rejects_parabolic_and_hyperbolic,
+               test_kepler_rejects_nonfinite_mean_anomaly,
+               test_state_vectors_reject_degenerate_elements,
+               test_orbital_period_rejects_unphysical_a,
+               test_eclipse_geometry_rejects_degenerate_position,
+               test_high_eccentricity_energy_conserved_and_period_closes):
         fn()
         print(f"PASS {fn.__name__}")
     print("All orbital tests PASS")

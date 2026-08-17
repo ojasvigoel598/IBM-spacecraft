@@ -56,7 +56,11 @@ D_SUN = 1.496e11                # m (1 AU, mean Earth-Sun distance)
 
 
 def orbital_period_s(a: float = REF_SEMI_MAJOR, mu: float = MU_EARTH) -> float:
-    """Kepler's third law: T = 2*pi*sqrt(a^3/mu)."""
+    """Kepler's third law: T = 2*pi*sqrt(a^3/mu). Raises for unphysical a."""
+    if a <= 0.0:
+        raise ValueError(f"semi-major axis must be > 0, got {a}")
+    if mu <= 0.0:
+        raise ValueError(f"gravitational parameter must be > 0, got {mu}")
     return float(2.0 * np.pi * np.sqrt(a ** 3 / mu))
 
 
@@ -67,15 +71,29 @@ def mean_anomaly(t: float, a: float = REF_SEMI_MAJOR,
     return float((n * t + M0) % (2.0 * np.pi))
 
 
-def kepler_solve(M: float, e: float, tol: float = 1e-12, max_iter: int = 60) -> float:
+def kepler_solve(M: float, e: float, tol: float = 1e-12, max_iter: int = 80) -> float:
     """Solve Kepler's equation E - e*sin(E) = M by Newton–Raphson.
 
     Returns eccentric anomaly E in [0, 2*pi). Valid for any e in [0, 1);
-    e=0 (circular) short-circuits to E = M.
+    e=0 (circular) short-circuits to E = M. e >= 1 (parabolic/hyperbolic)
+    is OUTSIDE the elliptic two-body domain of this module and raises
+    ValueError instead of returning a silently wrong iterate; non-convergence
+    after max_iter also raises rather than returning a stale value. High-e
+    elliptic cases (e -> 1) use the standard Vallado starting guess
+    (E0 = pi for e >= 0.8) and converge quadratically near the solution.
     """
     M = float(M % (2.0 * np.pi))
+    if not np.isfinite(M):
+        raise ValueError(f"mean anomaly must be finite, got {M}")
+    if e < 0.0 or e >= 1.0:
+        raise ValueError(f"eccentricity must be in [0, 1) for an elliptic orbit, got {e}")
     if e < 1e-12:
         return M
+    if M == 0.0:
+        # The only root of E - e*sin(E) = 0 on the circle is E = 0 (== 2pi).
+        # At e -> 1 Newton creeps toward it with fp -> 1-e and can land on the
+        # wrapped 2*pi copy; short-circuit the degenerate case explicitly.
+        return 0.0
     E = M if e < 0.8 else np.pi
     for _ in range(max_iter):
         f = E - e * np.sin(E) - M
@@ -83,8 +101,30 @@ def kepler_solve(M: float, e: float, tol: float = 1e-12, max_iter: int = 60) -> 
         dE = f / fp
         E -= dE
         if abs(dE) < tol:
-            break
-    return float(E % (2.0 * np.pi))
+            return _wrap_eccentric_anomaly(E)
+    # Fallback: g(E) = E - e*sin(E) - M is strictly increasing on [0, 2*pi]
+    # (g' = 1 - e*cos(E) >= 1 - e > 0), so bisection is guaranteed to
+    # converge. Only reached if Newton stalls (e very close to 1).
+    lo, hi = 0.0, 2.0 * np.pi
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if (mid - e * np.sin(mid) - M) > 0.0:
+            hi = mid
+        else:
+            lo = mid
+        if hi - lo < tol:
+            return _wrap_eccentric_anomaly(0.5 * (lo + hi))
+    raise RuntimeError(f"Kepler solver did not converge in {max_iter} iterations "
+                       f"(M={M:.6f}, e={e:.6f})")
+
+
+def _wrap_eccentric_anomaly(E: float) -> float:
+    """Wrap eccentric anomaly onto [0, 2*pi), snapping a value within 1e-12 of
+    2*pi to 0.0 (the same physical point on the circle)."""
+    E = float(E % (2.0 * np.pi))
+    if E > 2.0 * np.pi - 1e-12:
+        return 0.0
+    return E
 
 
 def true_anomaly_from_E(E: float, e: float) -> float:
@@ -140,7 +180,17 @@ def state_vectors_3d(t: float, a: float = REF_SEMI_MAJOR, e: float = REF_ECC,
     Solves Kepler's equation analytically (M = E - e sin E via Newton-Raphson)
     and rotates the perifocal state to ECI with the standard
     Rz(-Omega) Rx(-i) Rz(-omega) sequence. Returns (r_vec, v_vec, nu, M).
+    Raises ValueError for degenerate/unphysical element sets (a <= 0,
+    e outside [0, 1), mu <= 0) instead of returning NaN or dividing by zero.
     """
+    if a <= 0.0:
+        raise ValueError(f"semi-major axis must be > 0, got {a}")
+    if not (0.0 <= e < 1.0):
+        raise ValueError(f"eccentricity must be in [0, 1) for an elliptic orbit, got {e}")
+    if mu <= 0.0:
+        raise ValueError(f"gravitational parameter must be > 0, got {mu}")
+    if not np.isfinite(t):
+        raise ValueError(f"time must be finite, got {t}")
     # mean anomaly at epoch from the given initial true anomaly
     E0 = 2.0 * np.arctan2(np.sqrt(1.0 - e) * np.sin(np.radians(nu0_deg) / 2.0),
                           np.sqrt(1.0 + e) * np.cos(np.radians(nu0_deg) / 2.0))
@@ -173,6 +223,8 @@ def eclipse_geometry(r_vec: np.ndarray,
     Earth, from the two-circle overlap integral.
     """
     r_mag = float(np.linalg.norm(r_vec))
+    if r_mag <= 0.0 or not np.isfinite(r_mag):
+        raise ValueError(f"position vector must have finite non-zero magnitude, got |r|={r_mag}")
     e_hat = -r_vec / r_mag                        # toward Earth's centre
     s_dir = np.asarray(sun_dir, dtype=float)
     s_dir = s_dir / np.linalg.norm(s_dir)
