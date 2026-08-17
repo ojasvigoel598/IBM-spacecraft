@@ -473,6 +473,9 @@ def live_next(mode: str = "solar_degradation", n: int = 30):
                 "temperature_c": f.temperature_c,
                 "heat_in_w": f.heat_in_w,
                 "heat_out_w": f.heat_out_w,
+                "in_eclipse": getattr(f, "in_eclipse", 0),
+                "sun_exposure": getattr(f, "sun_exposure", 1.0),
+                "bus_state": getattr(f, "bus_state", "normal"),
             }
             frames.append(rec)
             _buffers[mode].append(rec)
@@ -485,6 +488,14 @@ def live_next(mode: str = "solar_degradation", n: int = 30):
         score = float(scored["anomaly_score"].iloc[-1])
         flag = int(scored["anomaly_flag"].iloc[-1])
         source = int(scored["anomaly_source"].iloc[-1])
+        # P9: eclipse-aware - the raw ensemble flags any solar dip, but an
+        # eclipse dip is expected physics. Suppress only when the measured
+        # solar matches the eclipse-adjusted expectation.
+        if flag and "in_eclipse" in win.columns and "sun_exposure" in win.columns:
+            from missionmind.physics_rules.rules import eclipse_residual
+            ecl = eclipse_residual(win)
+            if ecl is not None and ecl["in_eclipse"] and ecl["status"] == "eclipse":
+                flag = 0
         # burn-in convention: suppress the early-transient flag before t=100 s
         # (same as the Streamlit dashboard)
         if buf[-1]["time_s"] < 100:
