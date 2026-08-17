@@ -472,6 +472,15 @@ telemetry_json = json.dumps({
     "physics_flag": physics_flag,
     "physics_confidence": physics_conf,
     "anomaly_score": anomaly_score_val,
+    # Real Kepler orbital state (simulator/orbital.py) drives the 3D view:
+    # true anomaly for the ring angle, conical-shadow eclipse for illumination.
+    "orbit_angle_deg": float(current_row.get("orbit_angle_deg",
+                             (float(current_row["time_s"]) % 5730.1) / 5730.1 * 360.0)),
+    "orbit_period_s": float(current_row.get("orbit_period_s", 5730.1)),
+    "in_eclipse": int(current_row.get("in_eclipse", 0)),
+    "sun_exposure": float(current_row.get("sun_exposure", 1.0)),
+    "eclipse_state": str(current_row.get("eclipse_state", "full")),
+    "altitude_km": float(current_row.get("altitude_km", 550.0)),
 })
 
 three_js_html = f"""
@@ -578,8 +587,8 @@ function updateVisuals(t){{
   if(soc>0.8) battColor=new THREE.Color(0x00ff88); else if(soc>0.5) battColor=new THREE.Color(0xffcc00); else if(soc>0.3) battColor=new THREE.Color(0xff8800); else battColor=new THREE.Color(0xff0044);
   const hud=document.getElementById('hud');
   const _sec=t.time_s, _HH=String(Math.floor(_sec/3600)).padStart(2,'0'), _MM=String(Math.floor(_sec/60)%60).padStart(2,'0'), _SS=String(Math.floor(_sec)%60).padStart(2,'0');
-  const _ang=((_sec%1200)/1200*360).toFixed(1);
-  hud.innerHTML=`<b>⏱ T+${{_HH}}:${{_MM}}:${{_SS}}</b> · ORBIT ${{_ang}}°<br>☀️ <b>${{t.solar_power_w.toFixed(1)}}W</b> (${{(t.solar_power_w/520*100).toFixed(0)}}%) · 🔋 <b style='color:${{battColor.getStyle()}}'>${{(t.battery_soc*100).toFixed(1)}}%</b><br>🌡️ <b>${{t.temperature_c.toFixed(1)}}°C</b> · V:${{t.battery_voltage_v.toFixed(2)}}V<br>${{t.anomaly_flag?'<span class="warn">⚠ ANOMALY · '+t.anomaly_score.toFixed(3)+'</span><br>':'✅ NOMINAL<br>'}}${{t.physics_flag?'<span class="warn">'+t.physics_flag+' · conf '+t.physics_confidence+'</span>':''}}`;
+  const _ang=(typeof telemetry.orbit_angle_deg==='number'?telemetry.orbit_angle_deg:((_sec%5730.1)/5730.1*360)).toFixed(1);
+  hud.innerHTML=`<b>⏱ T+${{_HH}}:${{_MM}}:${{_SS}}</b> · ORBIT ${{_ang}}°<br>☀️ <b>${{t.solar_power_w.toFixed(1)}}W</b> (${{(t.solar_power_w/520*100).toFixed(0)}}%) · 🔋 <b style='color:${{battColor.getStyle()}}'>${{(t.battery_soc*100).toFixed(1)}}%</b><br>🌡️ <b>${{t.temperature_c.toFixed(1)}}°C</b> · V:${{t.battery_voltage_v.toFixed(2)}}V<br>${{t.anomaly_flag?'<span class="warn">⚠ ANOMALY · '+t.anomaly_score.toFixed(3)+'</span><br>':'✅ NOMINAL<br>'}}${{t.physics_flag?'<span class="warn">'+t.physics_flag+' · conf '+t.physics_confidence+'</span>':''}}${{telemetry.in_eclipse?'<span class="warn">🌑 ECLIPSE</span>':''}}`;
 }}
 /*__SCENE_POLISH__*/
 let time=0; function animate(){{ requestAnimationFrame(animate); time+=0.01; applyOrbit(); earth.rotation.y+=0.0015; atmosphere.rotation.y+=0.0015; stars.rotation.y+=0.0001; controls.update(); updateVisuals(telemetry); applyHover(); updateLabels(); renderer.render(scene,camera); window.__sat3d.tris = renderer.info.render.triangles; }} animate();
@@ -685,7 +694,12 @@ const _hemi = new THREE.HemisphereLight(0x3a4a7a, 0x05070f, 0.55); scene.add(_he
 const _rim = new THREE.DirectionalLight(0x2a4a7a, 0.5); _rim.position.set(-4, 2, -6); scene.add(_rim);
 // 5. ORBITAL MOTION: Earth at centre, satellite travels a 1200s orbit ring in sync
 //    with the mission clock (telemetry.time_s drives both the plots and the 3D).
-const _ORB_PERIOD = 1200, _ORB_R = 3.6;
+// 5. ORBITAL MOTION: driven by the real Kepler propagator. The ANGLE comes
+//    from telemetry.orbit_angle_deg (true anomaly, deg, from
+//    simulator/orbital.py); the ring radius is pure visual scale (the real
+//    orbit is 6921 km, not 3.6 scene units). Eclipse state from the conical
+//    shadow model dims the sun and lights the beacon.
+const _ORB_R = 3.6;
 earth.position.set(0, 0, 0); earth.scale.setScalar(0.65);
 atmosphere.position.set(0, 0, 0); atmosphere.scale.setScalar(0.65);
 const _ringPts = [];
@@ -699,18 +713,29 @@ scene.add(_ring);
 const _marker = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 12),
   new THREE.MeshBasicMaterial({ color: 0x00d4ff }));
 scene.add(_marker);
+function orbitAngleRad() {
+  if (typeof telemetry.orbit_angle_deg === 'number' && isFinite(telemetry.orbit_angle_deg)) {
+    return telemetry.orbit_angle_deg * Math.PI / 180;
+  }
+  const T = (typeof telemetry.orbit_period_s === 'number' && telemetry.orbit_period_s > 0)
+    ? telemetry.orbit_period_s : 5730.1;
+  return ((telemetry.time_s % T) / T) * Math.PI * 2;
+}
 function applyOrbit() {
-  const _theta = ((telemetry.time_s % _ORB_PERIOD) / _ORB_PERIOD) * Math.PI * 2;
+  const _theta = orbitAngleRad();
+  const _eclipsed = telemetry.in_eclipse === 1;
   const _x = Math.cos(_theta) * _ORB_R;
   const _z = Math.sin(_theta) * _ORB_R;
   sc.position.set(_x, 0, _z);
   sc.rotation.y = -_theta + Math.PI / 2;   // nose along the velocity vector
   _marker.position.set(_x, 0, _z);
+  _marker.material.color.set(_eclipsed ? 0xff4757 : 0x00d4ff);
+  sunLight.intensity = _eclipsed ? 0.12 : 2.0;
   // follow the spacecraft: camera + orbit-controls target ride with it
   camera.position.set(_x + Math.cos(_theta) * 2.1, 1.35, _z + Math.sin(_theta) * 2.1);
   controls.target.set(_x, 0, _z);
   controls.update();
-  window.__orbit = { deg: (_theta * 180 / Math.PI) % 360, period: _ORB_PERIOD };
+  window.__orbit = { deg: (_theta * 180 / Math.PI) % 360, eclipsed: _eclipsed, period: telemetry.orbit_period_s || 5730.1 };
 }
 """
 three_js_html = three_js_html.replace('/*__SCENE_POLISH__*/', _SCENE_POLISH_JS)
