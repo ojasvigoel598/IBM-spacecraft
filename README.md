@@ -316,10 +316,10 @@ Implemented:
 - **Fault injection**: solar degradation ramps `P_solar_max -> 0.48x` over `t = 600 -> 900 s`; radiator degradation ramps `e*A -> r_final * nominal`.
 - **Real IBM satellite CAD** (`satellite_geometry.js`): part-level fault animation, solar arrays dim + pulse on PV failure, main bus glows on radiator failure.
 - **Detector / physics-rule co-design**: every flagged row is visible in the alert card with the exact feature column that drove the flag.
+- **Real orbital physics**: analytical two-body propagation (Kepler's equation solved by Newton-Raphson) in 3D ECI coordinates, a conical shadow eclipse model (umbra / penumbra / sun-exposure factor), and a validated numerical extension point (`simulator/propagation.py`: RK4 + adaptive DOPRI5 + J2). The Three.js orbit view and HUD angle are driven by the propagated state, and the eclipse state is consumed by the physics rules. Method evaluation and measurements in `missionmind/docs/ORBITAL_PROPAGATION.md`.
 
 Not implemented:
 
-- **No real Kepler propagator** in `applyOrbit()` yet; the orbit ring is decorative. Tracked, not blocking.
 - **Live ingest is real but virtual**: a simulated ESP32-class edge node publishes the same physics over a real JSON-lines TCP socket (MQTT when paho-mqtt is installed); the ensemble scores the stream as it arrives. A physical ESP32/RPi can replace the virtual node with the same wire format (`missionmind/telemetry/`).
 - **The strict PINN does not beat the feature-only PGNN**; this is documented as a result, not hidden.
 
@@ -452,7 +452,7 @@ Fresh-checkout behaviour:
 - Ensemble coherence under inspector (flag=1 implies score<0 by construction)
 - 4-line causal narrative (WARN -> SUBSYSTEM -> EVIDENCE -> ACTION)
 - Granite client + RAG integrated with honest mock fallback
-- Real Kepler propagator: not yet (decorative orbit only)
+- Real Kepler propagator: analytical two-body + conical shadow eclipse in the runtime telemetry; numerical extension point (RK4 / adaptive DOPRI5 / J2) validated but not wired into the power solve (see `missionmind/docs/ORBITAL_PROPAGATION.md`)
 - Live telemetry ingest: virtual IoT edge node -> TCP/MQTT -> live ensemble scoring (`missionmind/telemetry/`)
 - Session persistence: dashboard resumes at last-viewed scenario/time after restart, plus login auto-start (`scripts/install_autostart.ps1`)
 - PINN vs PGNN result disclosed on disk and in this README
@@ -463,7 +463,7 @@ Fresh-checkout behaviour:
 
 PRs welcome. The two highest-leverage follow-ups:
 
-1. Real LEO Kepler propagator + visible eclipse in `viz/app.js` `applyOrbit()`.
+1. Wire the eclipse illumination into the power/battery solve (the rules layer already consumes `in_eclipse`; the nominal power envelope is still constant-illumination by design, documented in `missionmind/docs/ORBITAL_PROPAGATION.md`).
 2. Physical edge hardware: an ESP32/RPi running the same JSON-lines wire format the virtual node publishes, replacing `VirtualEdgeNode` in `run_edge_demo.py`.
 
 Both are tracked in `CHANGES.md` with risk / impact / effort annotations.
