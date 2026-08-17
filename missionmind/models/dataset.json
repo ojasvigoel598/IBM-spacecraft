@@ -1,9 +1,9 @@
 {
-  "dataset_id": "8f611131eeffa2b0-0ce9271414661ab1-1d704977dd66ef13",
+  "dataset_id": "bd2791149092bd3b-7d8316b3b562034c-a80b7b711594b7c8",
   "feature_matrices": {
-    "full": "8f611131eeffa2b0",
-    "power": "0ce9271414661ab1",
-    "thermal": "1d704977dd66ef13"
+    "full": "bd2791149092bd3b",
+    "power": "7d8316b3b562034c",
+    "thermal": "a80b7b711594b7c8"
   },
   "generator": "run_scenario(failure_mode='none', duration_s=2*orbital_period, add_noise=True)",
   "duration_s": 11460,
@@ -19,5 +19,5 @@
     "solar_residual_w",
     "thermal_residual_w"
   ],
-  "generated_at_utc": "2026-08-17 19:22:04Z"
+  "generated_at_utc": "2026-08-17 23:10:22Z"
 }
