@@ -50,6 +50,15 @@ jobs:
         run: .venv/bin/python -m missionmind.check_environment
       - name: Run test suite
         run: .venv/bin/python -m pytest missionmind/tests/ -q
+      - name: Dataset-change check (physics must not silently alter the training set)
+        run: |
+          .venv/bin/python -m missionmind.ml.train --retrain
+          if [ -n "$(git status --porcelain -- missionmind/models)" ]; then
+            echo "::error::retraining changed models or dataset.json - a physics/code change altered the training data. Commit the new models + dataset.json deliberately (models/dataset.json records the dataset_id)."
+            git diff --stat -- missionmind/models
+            exit 1
+          fi
+          echo "dataset check: committed training set is byte-reproducible"
       - name: Phantom-diff guard (testing must not modify the tree)
         run: |
           git status --porcelain
