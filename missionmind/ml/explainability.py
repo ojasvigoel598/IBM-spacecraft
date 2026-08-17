@@ -48,6 +48,25 @@ try:
 except Exception:  # noqa: BLE001 - optional dependency, verified fallback
     SHAP_AVAILABLE = False
 
+# P10: TreeExplainer construction scales with tree depth (max_samples=1024
+# trees take ~18s to build vs ~0.2s per shap_values call). Cache the
+# explainer per model so repeated explain_row calls in one process pay the
+# build cost once, not on every attribution.
+_EXPLAINER_CACHE = {}  # id(model) -> (model, explainer)
+
+
+def _get_explainer(model):
+    key = id(model)
+    hit = _EXPLAINER_CACHE.get(key)
+    if hit is not None and hit[0] is model:
+        return hit[1]
+    explainer = shap.TreeExplainer(model)
+    # keep only the most recent model's explainer (models are reloaded per
+    # request in long-lived servers; a growing cache would leak memory)
+    _EXPLAINER_CACHE.clear()
+    _EXPLAINER_CACHE[key] = (model, explainer)
+    return explainer
+
 
 def _nominal_reference(row_vals: np.ndarray, X_scaled: np.ndarray):
     """Per-feature 'normal' reference: the training median (scaled space).
@@ -83,7 +102,7 @@ def explain_row(df, row_idx: int = -1, models=None) -> dict:
 
     if SHAP_AVAILABLE:
         try:
-            explainer = shap.TreeExplainer(model_full)
+            explainer = _get_explainer(model_full)
             sv = explainer.shap_values(row.reshape(1, -1))
             attr = np.asarray(sv).reshape(-1)
             method = "shap"
@@ -148,6 +167,8 @@ def _summarize(top, feature_names):
         "temperature_c": "temperature",
         "d_temp_dt": "temperature rate",
         "d_volt_dt": "voltage rate",
+        "solar_residual_w": "eclipse-adjusted solar residual",
+        "thermal_residual_w": "radiator heat-rejection residual",
     }.get(name, name)
     if top["increases_risk"]:
         return f"{human} deviates from normal and increases risk"

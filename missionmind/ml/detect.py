@@ -212,12 +212,22 @@ if __name__ == "__main__":
     # instead of silently degrading. Only the three known scenario CSVs assert.
     # The radiator fault is a slow thermal ramp, so its gate is on the later
     # window (detection must land by t=2000, ~1100 s after onset); the solar
-    # fault is fast and must be caught immediately after onset.
+    # fault is fast and must be caught immediately after onset. Gates are
+    # illumination-aware: a solar fault is physically unobservable in umbra
+    # (a healthy array also produces ~0 W there), so the detector is asserted
+    # on the sunlight rows where the signal exists, plus the total clearing
+    # the sunlight floor.
     name = os.path.basename(args.input)
     if name == "run_normal.csv":
         assert after < 0.10, f"normal scenario flagged {after:.3f} after 900s - committed models drifted"
     elif name == "run_solar_failure.csv":
-        assert after > 0.90, f"solar scenario flagged {after:.3f} after 900s - committed models drifted (expected >0.90)"
+        post900 = df['time_s'] > 900
+        sun = post900 & (df['in_eclipse'].astype(float) < 0.5) if 'in_eclipse' in df.columns else post900
+        sun_frac = float(sun[post900].mean()) if post900.any() else 1.0
+        after_sun = float(df.loc[sun, 'anomaly_flag'].mean()) if sun.any() else after
+        assert after_sun > 0.9, (f"solar scenario must catch the array fault in sunlight, got {after_sun:.3f}")
+        assert after > 0.9 * sun_frac - 0.05, (f"solar scenario total after 900s {after:.3f} below "
+                                               f"sunlight floor {0.9 * sun_frac:.3f} - committed models drifted")
     elif name == "run_radiator_failure.csv":
         rad_late = df[df['time_s'] > 2000]['anomaly_flag'].mean()
         assert rad_late > 0.85, (f"radiator scenario flagged {rad_late:.3f} after 2000s - "

@@ -118,25 +118,40 @@ def decide_components(df, df_feat, models, comps=None) -> dict:
     ]
 
     # ---- ML-vs-physics disagreement: eclipse explains a solar dip ----
-    # P5-ORBIT: if the ML ensemble flags solar while Kepler physics says the
-    # satellite is in eclipse, expose the disagreement instead of hiding it:
-    # strategy ECLIPSE_EXPLAINED, flag suppressed, reasoning shows both sides.
+    # P9: the eclipse rule is RESIDUAL-based. It only reports 'eclipse' when
+    # the measured solar drop matches the eclipse-adjusted expectation; a
+    # fault substantially below that expectation reports 'eclipse_plus_fault'
+    # and the ML flag is KEPT (never silently erased by an eclipse).
     if eclipse_rule is not None and eclipse_rule[1] > 0.5:
-        if flags.get("power", 0) or flags.get("full", 0):
-            strategy = "ECLIPSE_EXPLAINED"
-            flag = 0
-            _ecl_frac = (float(df["in_eclipse"].mean())
-                         if "in_eclipse" in df.columns else 0.0)
+        if eclipse_rule[0] == "eclipse":
+            if flags.get("power", 0) or flags.get("full", 0):
+                strategy = "ECLIPSE_EXPLAINED"
+                flag = 0
+                _ecl_frac = (float(df["in_eclipse"].mean())
+                             if "in_eclipse" in df.columns else 0.0)
+                reasoning.append(
+                    f"ML flags solar dip but Kepler physics: in-eclipse "
+                    f"{_ecl_frac:.0%} and solar matches the eclipse-adjusted "
+                    f"expectation -> expected transient, NOT a fault "
+                    f"(residual explained)")
+                decision = _decision(strategy, float(min(scores.values())), flag,
+                                     reasoning, weights=STRATEGY_WEIGHTS["NOMINAL"],
+                                     context={"eclipse_conf": eclipse_rule[1]})
+                _trace(strategy, t, flag, "eclipse explains ML solar flag (residual small)")
+                return decision
+            reasoning.append("in eclipse: solar dip expected by orbit physics (no ML flag)")
+        else:  # eclipse_plus_fault: real fault during eclipse, keep the flag
+            strategy = "ECLIPSE_PLUS_FAULT"
+            flag = 1
             reasoning.append(
-                f"ML flags solar dip but Kepler physics: in-eclipse "
-                f"{_ecl_frac:.0%} -> expected transient, NOT a fault "
-                f"(disagreement exposed)")
+                f"in eclipse BUT solar is far below the eclipse-adjusted "
+                f"expectation -> genuine fault, NOT explained by orbital "
+                f"geometry (flag kept)")
             decision = _decision(strategy, float(min(scores.values())), flag,
-                                 reasoning, weights=STRATEGY_WEIGHTS["NOMINAL"],
+                                 reasoning, weights=STRATEGY_WEIGHTS["RULE_POWER"],
                                  context={"eclipse_conf": eclipse_rule[1]})
-            _trace(strategy, t, flag, "eclipse explains ML solar flag")
+            _trace(strategy, t, flag, "eclipse does NOT explain the solar dip (fault kept)")
             return decision
-        reasoning.append("in eclipse: solar dip expected by orbit physics (no ML flag)")
 
     # ---- situation -> strategy ----
     if t < BURN_IN_S:
