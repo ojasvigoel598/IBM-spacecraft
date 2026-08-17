@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from missionmind.simulator.power import (
     P_SOLAR_MAX, P_LOAD, E_CAP_WH, V_MIN, V_MAX, SOC_0,
-    compute_power_step
+    compute_power_step, BUS_NORMAL
 )
 from missionmind.simulator.thermal import (
     MC_P, ETA, EPSILON, AREA, SIGMA, T_SPACE_K, T0_K, DEMO_FAST,
@@ -126,17 +126,28 @@ def run_scenario(failure_mode: str = "none", duration_s: int = 3600, soc_init: f
     rows = []
     soc = soc_init
     T_k = t0_k
+    bus_state = BUS_NORMAL
     import numpy as np
     rng = np.random.default_rng(0) if add_noise else None
 
     for t in range(duration_s):
-        # Power side
-        deg_factor = get_solar_degradation(t, failure_mode)
-        solar_w, load_w, soc_new, voltage_v, net_w = compute_power_step(t, soc, deg_factor)
+        # P7: orbital illumination first - the SAME eclipse state drives the
+        # power, thermal, battery and telemetry paths (one source of truth).
+        orb = orbit_columns(float(t))
+        sun_exposure = orb["sun_exposure"]
 
-        # Thermal side
+        # Power side (eclipse-coupled, energy-conserving battery policy)
+        deg_factor = get_solar_degradation(t, failure_mode)
+        solar_w, load_w, soc_new, voltage_v, net_w, bus_state = compute_power_step(
+            t, soc, deg_factor, sun_exposure=sun_exposure, bus_state=bus_state)
+
+        # Thermal side: internal dissipation follows the ACTUAL bus load
+        # (load shedding changes Q_in), plus first-order LEO environment
+        # (solar/albedo/IR) scaled by the same sun_exposure.
         eps_eff, area_eff, epsA_prod = get_radiator_effective_epsilon_area(t, failure_mode)
-        T_new, q_in, q_out, dT = compute_thermal_step(t, T_k, eps_eff, area_eff, q_in=Q_IN_NOMINAL)
+        q_in_load = load_w * (1.0 - ETA)
+        T_new, q_in, q_out, dT = compute_thermal_step(
+            t, T_k, eps_eff, area_eff, q_in=q_in_load, sun_exposure=sun_exposure)
 
         # P2-003: Optional sensor noise for realism
         if add_noise:
@@ -160,13 +171,14 @@ def run_scenario(failure_mode: str = "none", duration_s: int = 3600, soc_init: f
             "heat_out_w": q_out_noisy,
             "temperature_c": temp_c_noisy,
             "failure_mode": failure_mode,
+            "bus_state": bus_state,
         }
         # P5-ORBIT: real Kepler orbital telemetry (deterministic) appended to
-        # every frame. Additive only — the ML feature matrix and all existing
-        # consumers select columns by name, so this cannot change trained
-        # behaviour, but it lets physics rules explain solar dips (eclipse).
+        # every frame. The SAME eclipse state (sun_exposure / in_eclipse)
+        # drives the power and thermal models above - telemetry and physics
+        # can never disagree.
         if add_orbit:
-            row.update(orbit_columns(float(t)))
+            row.update(orb)
         rows.append(row)
 
         soc = soc_new

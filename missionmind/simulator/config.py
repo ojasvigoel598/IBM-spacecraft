@@ -30,13 +30,16 @@ SOC_0 = 0.9
 DT_S = 1.0
 
 # Thermal Subsystem Spec §4
-MC_P_SPEC = 5000.0   # Spec value J/K
-MC_P_DEMO = 2000.0   # Demo fast value for detectability
-# P5-009 FIX: read MISSIONMIND_PHYSICS_SPEC env var so an operator can
-# flip to spec-faithful physics without editing source. env var wins over
-# the literal default, which keeps True for the demo pipeline.
-DEMO_FAST = (os.environ.get("MISSIONMIND_PHYSICS_SPEC", "0") != "1")
-MC_P = MC_P_DEMO if DEMO_FAST else MC_P_SPEC
+MC_P_SPEC = 5000.0   # Spec value J/K (nominal physics)
+MC_P_DEMO = 2000.0   # Legacy demo value (was tuned for 1-h detectability)
+# P5-009 / P8: physics fidelity selector. DEFAULT = SPEC (physically
+# justified nominal values). The demo-tuned values (MC_P 2000 and the
+# exaggerated 10% radiator fault) are opt-in via MISSIONMIND_DEMO_FAST=1
+# and are labelled as controlled injected faults, not nominal physics.
+DEMO_FAST = (os.environ.get("MISSIONMIND_DEMO_FAST", "0") == "1")
+if os.environ.get("MISSIONMIND_PHYSICS_SPEC", "0") == "1":
+    DEMO_FAST = False   # backwards compatible: force spec explicitly
+MC_P = MC_P_SPEC if not DEMO_FAST else MC_P_DEMO
 ETA = 0.85
 EPSILON = 0.85
 AREA = 0.5
@@ -53,14 +56,38 @@ RAMP_DURATION = T_RAMP_END - T_RAMP_START
 SOLAR_FINAL_FACTOR_SPEC = 0.48
 SOLAR_FINAL_FACTOR = 0.48
 
-RADIATOR_FINAL_FRACTION_SPEC = 0.30  # Spec: 30% → epsA 0.1275 → eq 28C
-RADIATOR_FINAL_FRACTION_DEMO = 0.10  # Demo: 10% → epsA 0.0425 → eq 124C
-RADIATOR_FINAL_FRACTION = RADIATOR_FINAL_FRACTION_DEMO if DEMO_FAST else RADIATOR_FINAL_FRACTION_SPEC
+RADIATOR_FINAL_FRACTION_SPEC = 0.30  # Spec: 30% -> epsA 0.1275 (realistic injected fault)
+RADIATOR_FINAL_FRACTION_DEMO = 0.10  # Exaggerated demo fault (10% -> epsA 0.0425).
+# Explicitly a CONTROLLED INJECTED FAULT for 1-hour detectability, NOT a
+# nominal-physics parameter. The realistic fault (SPEC 30%) is the default.
+RADIATOR_FINAL_FRACTION = (RADIATOR_FINAL_FRACTION_DEMO if DEMO_FAST
+                           else RADIATOR_FINAL_FRACTION_SPEC)
 
 EPSILON_A_NOMINAL = EPSILON * AREA  # 0.425
 EPSILON_A_FINAL = EPSILON_A_NOMINAL * RADIATOR_FINAL_FRACTION
 EPSILON_A_FINAL_SPEC = EPSILON_A_NOMINAL * RADIATOR_FINAL_FRACTION_SPEC
 EPSILON_A_FINAL_DEMO = EPSILON_A_NOMINAL * RADIATOR_FINAL_FRACTION_DEMO
+
+# Battery policy (first-order energy-conserving, see power.py)
+# A real battery cannot deliver load once depleted: below SOC_SAFE_MODE_ENTER
+# the bus sheds non-essential load; at SOC 0 the bus trips (load -> 0) and
+# waits for solar recharge above SOC_SAFE_MODE_EXIT (hysteresis).
+SOC_SAFE_MODE_ENTER = 0.20   # enter safe mode below this SOC
+SOC_SAFE_MODE_EXIT = 0.35    # resume full load above this SOC (hysteresis)
+P_LOAD_SAFE = 100.0          # W, safe-mode load (essential bus only)
+V_UVLO = 22.0                # V, hardware undervoltage-lockout floor (reference;
+                             # the linear model trips the bus at V_MIN=24 V = SOC 0)
+
+# Thermal environment (first-order LEO model, see thermal.py)
+# Direct solar, Earth albedo and Earth IR absorbed on the bus; radiative
+# rejection on the radiator. First-order engineering fidelity only.
+G_SOLAR = 1361.0      # W/m^2 solar constant at 1 AU
+ALPHA_S = 0.16        # solar absorptivity of sunlit surfaces (OSR/MLI dominated)
+A_SUNLIT = 0.30       # m^2 projected sunlit area
+ALBEDO = 0.30         # Earth albedo
+F_ALBEDO = 0.15       # view factor to the lit Earth (first-order)
+Q_IR_EARTH = 230.0    # W/m^2 Earth IR flux at spacecraft altitude
+F_IR = 0.40           # view factor to the Earth (first-order)
 
 # Physics Rules Spec §6
 P_SOLAR_MAX_FOR_RULES = P_SOLAR_MAX
