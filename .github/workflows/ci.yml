@@ -52,12 +52,16 @@ jobs:
         run: .venv/bin/python -m pytest missionmind/tests/ -q
       - name: Dataset-change check (physics must not silently alter the training set)
         run: |
-          # The dataset_id is the invariant: a hash of the actual fitted
-          # feature matrices, produced by pure-float arithmetic + a frozen
-          # PCG64 RNG, so it reproduces across Python/sklearn versions. Fitted
-          # model BYTES are version-dependent (sklearn internals), so only the
-          # id is compared; model behaviour is guarded by the detect gates and
-          # the test suite in this same job.
+          # The dataset_id is the invariant: a hash (rounded to 6 decimals, to
+          # absorb last-ULP cross-platform float differences) of the actual
+          # fitted feature matrices, produced by IEEE-deterministic arithmetic
+          # + a frozen PCG64 RNG, so it reproduces across platforms and
+          # Python/sklearn versions. The physics deliberately avoids platform
+          # pow() (numpy `x ** 4` differs across libms; the thermal ODE uses
+          # explicit multiplication instead). Fitted model BYTES are
+          # version-dependent (sklearn internals), so only the id is compared;
+          # model behaviour is guarded by the detect gates and the test suite
+          # in this same job.
           OLD_ID=$(python -c "import json;print(json.load(open('missionmind/models/dataset.json'))['dataset_id'])")
           .venv/bin/python -m missionmind.ml.train --retrain
           NEW_ID=$(python -c "import json;print(json.load(open('missionmind/models/dataset.json'))['dataset_id'])")

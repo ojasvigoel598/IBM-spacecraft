@@ -146,7 +146,11 @@ def thermal_rejection_residual(window: pd.DataFrame):
     if "heat_out_w" not in window.columns:
         return None
     t_k = window["temperature_c"].astype(float) + 273.15
-    expected = float((EPSILON_A_NOMINAL * SIGMA * (t_k ** 4 - T_SPACE_K ** 4)).mean())
+    # T^4 via multiplication (not `x ** 4`): platform pow() differs in the
+    # last ULP across libms; multiplication is IEEE-deterministic everywhere.
+    t4 = (t_k * t_k) * (t_k * t_k)
+    expected = float((EPSILON_A_NOMINAL * SIGMA
+                      * (t4 - (T_SPACE_K * T_SPACE_K) * (T_SPACE_K * T_SPACE_K))).mean())
     measured = float(window["heat_out_w"].astype(float).mean())
     return measured - expected, expected
 

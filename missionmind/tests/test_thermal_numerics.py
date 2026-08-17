@@ -28,6 +28,13 @@ from missionmind.simulator.config import (
 from missionmind.simulator.thermal import thermal_environment_fluxes
 
 
+def _t4(x):
+    """x^4 via multiplication — must match the production thermal.py `_t4`
+    (numpy `x ** 4` calls platform pow(), which is not IEEE-deterministic
+    across libms and broke the CI dataset-reproducibility check)."""
+    return (x * x) * (x * x)
+
+
 def _euler_integrate(dt_s, duration_s, sun_exposure, t_init_k=T0_K,
                      q_in=Q_IN_NOMINAL, eps=EPSILON, area=AREA):
     """Reference Euler integrator of the SAME thermal equation with a
@@ -37,7 +44,7 @@ def _euler_integrate(dt_s, duration_s, sun_exposure, t_init_k=T0_K,
     T = t_init_k
     n = int(round(duration_s / dt_s))
     for _ in range(n):
-        q_out = eps * SIGMA * area * (T ** 4 - T_SPACE_K ** 4)
+        q_out = eps * SIGMA * area * (_t4(T) - _t4(T_SPACE_K))
         T += (q_in_total - q_out) * dt_s / MC_P
     return T
 
@@ -59,7 +66,7 @@ def test_euler_energy_balance_holds_per_step():
     env = thermal_environment_fluxes(0.5)  # penumbra
     q_in_total = Q_IN_NOMINAL + env["total_w"]
     for _ in range(10):
-        q_out = EPSILON * SIGMA * AREA * (T ** 4 - T_SPACE_K ** 4)
+        q_out = EPSILON * SIGMA * AREA * (_t4(T) - _t4(T_SPACE_K))
         dT = (q_in_total - q_out) / MC_P
         T_new = T + dT
         assert abs((T_new - T) - dT) < 1e-12
@@ -92,7 +99,7 @@ def test_euler_reaches_same_equilibrium():
     for exposure in (1.0, 0.0):
         env = thermal_environment_fluxes(exposure)
         q_in_total = Q_IN_NOMINAL + env["total_w"]
-        T_eq = (q_in_total / (EPSILON * SIGMA * AREA) + T_SPACE_K ** 4) ** 0.25
+        T_eq = (q_in_total / (EPSILON * SIGMA * AREA) + _t4(T_SPACE_K)) ** 0.25
         t_fine = _euler_integrate(0.05, 4 * 3600, exposure)
         t_prod = _euler_integrate(1.0, 4 * 3600, exposure)
         assert abs(t_prod - T_eq) < 1.0, f"dt=1s not at equilibrium: {t_prod - T_eq} K"
