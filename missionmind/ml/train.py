@@ -88,7 +88,12 @@ def add_derivative_features(df: pd.DataFrame, dt_s: float = 1.0) -> pd.DataFrame
     # absent (legacy frames).
     if "heat_out_w" in df.columns:
         t_k = df["temperature_c"].astype(float) + 273.15
-        expected = EPSILON_A_NOMINAL * SIGMA * (t_k ** 4 - T_SPACE_K ** 4)
+        # T^4 via pure multiplication (NOT `x ** 4`): numpy's `** 4` calls the
+        # platform C pow(), which differs in the last ULP between libms and
+        # made the training dataset platform-dependent (CI reproducibility
+        # failure). Multiplication is IEEE-754 deterministic everywhere.
+        t4 = (t_k * t_k) * (t_k * t_k)
+        expected = EPSILON_A_NOMINAL * SIGMA * (t4 - (T_SPACE_K * T_SPACE_K) * (T_SPACE_K * T_SPACE_K))
         df["thermal_residual_w"] = df["heat_out_w"].astype(float) - expected
     else:
         df["thermal_residual_w"] = 0.0
@@ -137,9 +142,18 @@ def dataset_fingerprint(X: np.ndarray) -> str:
     to the power/thermal solve, the noise model, the feature set or the seed
     changes the id — which makes an intentional regeneration visible instead of
     silently minting a new dataset.
+
+    Cross-platform stability: the eclipse-coupled feature matrix is built from
+    trigonometric geometry (sun_exposure), and numpy's trig kernels can differ
+    by a few ULPs between platforms/builds (Windows MSVC vs Linux GCC, SIMD
+    selection). Hashing exact float64 bytes would therefore flip the id on a
+    platform switch even though the physics is bit-identical to ~1e-12. The
+    matrix is rounded to 6 decimals before hashing: ULP noise (~1e-15) is
+    absorbed, while any genuine physics/feature change (>> 1e-6) still changes
+    the id. Pinned by tests/test_dataset_change.py.
     """
     h = hashlib.sha256()
-    h.update(np.ascontiguousarray(X, dtype=np.float64).tobytes())
+    h.update(np.round(np.ascontiguousarray(X, dtype=np.float64), 6).tobytes())
     return h.hexdigest()[:16]
 
 

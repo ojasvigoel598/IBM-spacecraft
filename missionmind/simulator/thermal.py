@@ -35,10 +35,23 @@ from .config import (
 print(f"[Thermal] Loaded constants from central config.py DEMO_FAST={DEMO_FAST}")
 
 
+def _t4(x):
+    """x^4 as pure multiplications, NOT `x ** 4`.
+
+    numpy's `** 4` on float64 dispatches to the platform C `pow()`, which
+    differs in the last ULP between libms (MSVC vs glibc). The thermal ODE
+    integrates T^4 every second, so even a 1-ULP difference makes the whole
+    trajectory platform-dependent — which broke the CI dataset-reproducibility
+    check (Windows vs Linux produced different training data). Explicit
+    multiplication is IEEE-754 deterministic on every platform.
+    """
+    return (x * x) * (x * x)
+
+
 def compute_equilibrium_temp(epsilon_eff=EPSILON, area_eff=AREA, q_in=Q_IN_NOMINAL):
     """Solve Q_in = epsilon*sigma*A*(T^4 - T_space^4) for T (radiator only,
     no environment). Returns T in K and C."""
-    T4 = q_in / (epsilon_eff * SIGMA * area_eff) + T_SPACE_K ** 4
+    T4 = q_in / (epsilon_eff * SIGMA * area_eff) + _t4(T_SPACE_K)
     T_k = T4 ** 0.25
     return T_k, T_k - 273.15
 
@@ -62,7 +75,7 @@ def compute_environment_equilibrium_temp(sun_exposure: float = 1.0,
                                          q_in=Q_IN_NOMINAL):
     """Full-model equilibrium (internal + environment vs radiator rejection)."""
     env = thermal_environment_fluxes(sun_exposure)
-    T4 = (q_in + env["total_w"]) / (epsilon_eff * SIGMA * area_eff) + T_SPACE_K ** 4
+    T4 = (q_in + env["total_w"]) / (epsilon_eff * SIGMA * area_eff) + _t4(T_SPACE_K)
     T_k = T4 ** 0.25
     return T_k, T_k - 273.15, env
 
@@ -79,7 +92,7 @@ def compute_thermal_step(t_s: float, T_k: float, epsilon_eff: float = EPSILON,
     """
     env = thermal_environment_fluxes(sun_exposure)
     q_in_total = q_in + env["total_w"]
-    q_out = epsilon_eff * SIGMA * area_eff * (T_k ** 4 - T_SPACE_K ** 4)
+    q_out = epsilon_eff * SIGMA * area_eff * (_t4(T_k) - _t4(T_SPACE_K))
     dT = (q_in_total - q_out) * DT_S / MC_P
     T_new = T_k + dT
     return T_new, q_in, q_out, dT
