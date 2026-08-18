@@ -117,13 +117,20 @@ class FrameOut(BaseModel):
 
 @app.get("/api/health")
 def health():
-    from missionmind.ai.granite_client import WATSONX_AVAILABLE
+    """Runtime health: model artifacts + a clear Granite state machine so a
+    judge can distinguish MOCK / REAL_READY / REAL_FAILED without any
+    credential being exposed (api_key_present is a boolean only)."""
+    from missionmind.ai.granite_client import granite_status
+    g = granite_status()
     return {
         "status": "ok",
         "models": os.path.exists(os.path.join(
             os.path.dirname(__file__), "..", "models", "iforest.joblib")),
-        "watsonx_sdk": WATSONX_AVAILABLE,
-        "watsonx_key": bool(os.getenv("WATSONX_APIKEY") or os.getenv("WATSONX_API_KEY")),
+        # backward-compatible keys (web frontend reads watsonx_key)
+        "watsonx_sdk": g["sdk_installed"],
+        "watsonx_key": g["api_key_present"],
+        # full, honest state — never contains the key itself
+        "granite": g,
     }
 
 

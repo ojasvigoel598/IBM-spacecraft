@@ -212,6 +212,27 @@ def test_cors_allowlist_is_env_configurable():
             os.environ["MISSIONMIND_ALLOWED_ORIGINS"] = old
 
 
+def test_health_reports_granite_state_without_secrets():
+    """/api/health must expose the Granite state machine (MOCK / REAL_READY /
+    REAL_FAILED) with booleans only — never the key value itself — and keep
+    the legacy watsonx_key field the web frontend reads."""
+    r = client.get("/api/health")
+    assert r.status_code == 200, r.text[:200]
+    body = r.json()
+    assert body["watsonx_key"] is True or body["watsonx_key"] is False
+    g = body["granite"]
+    for key in ("mode", "sdk_installed", "api_key_present", "project_id_present",
+                "model_id", "url", "ready_for_real_call", "last_real_request"):
+        assert key in g, f"granite status missing {key}"
+    assert g["mode"] in ("MOCK", "REAL_READY", "REAL_FAILED")
+    assert isinstance(g["api_key_present"], bool)
+    # the response must never contain an actual key value
+    for env in ("WATSONX_APIKEY", "WATSONX_API_KEY"):
+        val = os.environ.get(env)
+        if val:
+            assert val not in r.text, "API key leaked into health response"
+
+
 def test_cors_methods_are_read_only():
     """The API is GET-only; the CORS middleware must not advertise write
     methods to browsers."""
@@ -235,7 +256,8 @@ if __name__ == "__main__":
              test_cors_blocks_unknown_origins,
              test_cors_allows_local_dashboard_origin,
              test_cors_allowlist_is_env_configurable,
-             test_cors_methods_are_read_only]
+             test_cors_methods_are_read_only,
+             test_health_reports_granite_state_without_secrets]
     failed = []
     for t in tests:
         try:
