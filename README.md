@@ -320,11 +320,24 @@ The spacecraft in the 3D viewer is a real Fusion-exported IBM satellite (not a p
 Granite is not used as an anomaly detector. The ML ensemble + physics rules are deterministic and frozen at every cursor position. Granite is invoked only for the human-readable explanation:
 
 1. The retriever sees the current anomaly row plus the physics-rule hits.
-2. It returns the top-k markdown chunks from `missionmind/ai/knowledge_base/*.md`, each scored by TF-IDF.
-3. The system prompt declares the contract: output JSON with `diagnosis, evidence, recommended_action, risk` and `citations` arrays linking back to the chunks.
+2. It builds the query around the detected physics signature and returns the
+   top-k chunks from `missionmind/ai/knowledge_base/*.md`, scored by TF-IDF
+   and **metadata-scoped** to the systems the query names (power / thermal /
+   mission) plus the shared telemetry dictionary. A query that names no known
+   system gets NO evidence — the system refuses rather than guesses.
+3. The system prompt declares the contract: output JSON with `diagnosis, evidence, recommended_action, risk` and `citations` arrays linking back to the chunks, treats retrieved text strictly as DATA (never instructions), and labels each passage with its source file.
 4. `ibm/granite-4-h-small` (override with `WATSONX_MODEL_ID`) fills that contract; the dashboard parses and displays the result.
 
 If `WATSONX_APIKEY` is not set, the sidebar shows `API Key: missing (mock fallback)` and the function uses a deterministic mock that returns the same JSON shape with the RAG chunks surfaced as citations, so it is always obvious whether the output came from a real LLM call or the mock.
+
+The retrieval layer is validated **independently of Granite** (no credentials,
+no network): a golden dataset of 18 typed engineering questions measures
+Recall@k / Precision@k / MRR / nDCG, adversarial attacks (wrong-document,
+conflicting sources, prompt injection, unit confusion) are defended, and the
+full RAG suite must pass **10 consecutive clean runs**
+(`python -m missionmind.ai.rag_validation --runs 10`). Full methodology,
+measured scores and honest limitations:
+[`missionmind/docs/RAG_EVALUATION.md`](missionmind/docs/RAG_EVALUATION.md).
 
 ---
 
@@ -351,8 +364,10 @@ Not implemented:
 ```
 missionmind/
 |-- ai/                     IBM watsonx.ai client + RAG retriever + prompt templates
-|   |-- granite_client.py   real + mock wrappers
-|   |-- rag.py              TF-IDF over a 3-file knowledge base
+|   |-- granite_client.py   real + mock wrappers (strict smoke-test mode)
+|   |-- rag.py              metadata-scoped TF-IDF over a 4-file KB incl. telemetry dictionary
+|   |-- rag_eval.py         golden dataset + Recall@k/MRR/nDCG evaluation harness
+|   |-- rag_validation.py   10-consecutive-clean-runs reproducibility gate
 |   +-- prompts.py          SYSTEM / RAG / EVIDENCE prompt contracts
 |
 |-- simulator/              coupled power + thermal ODE solver, fault injection
@@ -462,7 +477,7 @@ Fresh-checkout behaviour:
 | Code | `missionmind/ai/granite_client.py`: `_call_watsonx_granite()` is the only real-network path |
 | Mock | `generate_explanation(...)` falls back to a deterministic mock that still returns schema-correct JSON with RAG citations; the sidebar shows which mode is active |
 | Verify a key | `python -m missionmind.ai.granite_client --check` reports config, then makes ONE real call — it can only report CHECK PASS if IBM actually answered (strict mode never substitutes the mock) |
-| RAG corpus | `missionmind/ai/knowledge_base/{power_subsystem, thermal_subsystem, mission_rules}.md` |
+| RAG corpus | `missionmind/ai/knowledge_base/{power_subsystem, thermal_subsystem, mission_rules, telemetry_reference}.md` (the telemetry dictionary grounds every variable before reasoning) |
 | Citations | Granite is asked to fill a `citations[]` array linking each claim to a TF-IDF chunk, so each dashboard claim is traceable to a file |
 
 ---
