@@ -163,6 +163,41 @@ class RAGRetriever:
         return results
 
 
+    def query_from_anomaly(self, anomaly_input: dict, top_k: int = 3):
+        """
+        Build query string from anomaly dict, retrieve.
+
+        The query is centered on the DETECTED SIGNATURE (the physics flag)
+        so the signature chunk outranks generic subsystem prose and telemetry
+        dictionary entries. The telemetry values are kept as grounding tokens
+        and the mission-rules tail stays for the action/recommendation.
+        """
+        subsystem = anomaly_input.get("subsystem", "")
+        flag = anomaly_input.get("physics_flag", "")
+        q_parts = [subsystem, flag, str(anomaly_input.get("current_values", ""))]
+        if flag == "solar_degradation" or (subsystem == "power" and flag and "solar" in flag):
+            q_parts.append(
+                "solar array degradation solar power drops 364W threshold "
+                "net power SOC decline troubleshooting load shedding")
+        elif flag == "radiator_degradation" or (subsystem == "thermal" and flag and "radiator" in flag):
+            q_parts.append(
+                "radiator degradation temperature rising heat_in stable "
+                "heat rejection epsilon area troubleshooting")
+        else:
+            q_parts.append("monitoring telemetry trend anomaly attribution")
+        q_parts.append("mission rules risk recommended action")
+        query = " ".join([p for p in q_parts if p])
+        hits = self.retrieve(query, top_k=top_k)
+        try:
+            from missionmind.trace import record
+            record("ai.rag", "query_from_anomaly",
+                   note=f"{subsystem or 'unknown'} query -> {len(hits)} docs",
+                   value=round(hits[0]["score"], 3) if hits else None)
+        except Exception:  # noqa: BLE001
+            pass
+        return hits
+
+
 def _system_for_file(fp: str) -> str:
     """Map a knowledge-base file to its system metadata by filename.
 
@@ -184,36 +219,6 @@ def _system_for_file(fp: str) -> str:
         if hits > best_hits:
             best, best_hits = sys_, hits
     return best or "mission"
-
-    def query_from_anomaly(self, anomaly_input: dict, top_k: int = 3):
-        """
-        Build query string from anomaly dict, retrieve.
-        """
-        subsystem = anomaly_input.get("subsystem", "")
-        flag = anomaly_input.get("physics_flag", "")
-        # Build descriptive query
-        q_parts = [
-            subsystem,
-            flag,
-            str(anomaly_input.get("current_values","")),
-            str(anomaly_input.get("probable_cause","")) if "probable_cause" in anomaly_input else "",
-        ]
-        # Add logic: if power, query solar, battery etc.
-        if subsystem == "power" or (flag and "solar" in flag):
-            q_parts.append("solar array degradation battery voltage SOC troubleshooting power load shedding")
-        if subsystem == "thermal" or (flag and "radiator" in flag):
-            q_parts.append("radiator degradation thermal temperature heat rejection epsilon area troubleshooting")
-        q_parts.append("mission rules risk recommended action")
-        query = " ".join([p for p in q_parts if p])
-        hits = self.retrieve(query, top_k=top_k)
-        try:
-            from missionmind.trace import record
-            record("ai.rag", "query_from_anomaly",
-                   note=f"{subsystem or 'unknown'} query -> {len(hits)} docs",
-                   value=round(hits[0]["score"], 3) if hits else None)
-        except Exception:  # noqa: BLE001
-            pass
-        return hits
 
 # Singleton for app
 _retriever = None
