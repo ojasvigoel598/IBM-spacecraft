@@ -30,35 +30,64 @@ class RAGRetriever:
 
     def _load_docs(self):
         pattern = os.path.join(self.kb_dir, "*.md")
-        files = glob.glob(pattern)
+        files = sorted(glob.glob(pattern))
         docs = []
+        seen_ids = {}
         for fp in files:
             with open(fp, 'r', encoding='utf-8') as f:
                 content = f.read()
-            # Extract doc ID from content or filename
-            # Look for [DOC-...]
-            ids = re.findall(r'\[([A-Z\-0-9]+)\]', content)
-            # Title first line
             lines = content.strip().split('\n')
-            title = lines[0].replace('#','').strip() if lines else os.path.basename(fp)
-            # Split into chunks per section (##) for finer retrieval
+            root_title = lines[0].replace('#', '').strip() if lines else os.path.basename(fp)
+            file_base = os.path.splitext(os.path.basename(fp))[0].upper()
+            # Split into level-2 (##) sections; within each, split level-3
+            # (###) subsections so every ID-carrying block ([DOC-...]) becomes
+            # its own retrievable chunk. A citation must point at the text
+            # that actually carries the ID, so the ID is extracted from the
+            # chunk's OWN text - never by positional lookup over the whole
+            # document (which mislabels every section after the header).
             sections = re.split(r'\n##\s+', content)
-            for idx, sec in enumerate(sections):
+            idx = 0
+            for sec in sections:
                 if not sec.strip():
                     continue
-                sec_id = ids[idx] if idx < len(ids) else f"{os.path.splitext(os.path.basename(fp))[0].upper()}-{idx}"
-                # P3-003 FIX: Standardize IDs
-                sec_id = sec_id.replace('_','-').upper().strip()
-                if not sec_id.startswith("DOC"):
-                    sec_id = f"DOC-{sec_id}"
-                sec_id = re.sub(r'[^A-Z0-9\-]', '-', sec_id)
-                sec_id = re.sub(r'-+', '-', sec_id)
-                docs.append({
-                    "id": sec_id,
-                    "title": f"{title} - chunk {idx}" if len(sections)>1 else title,
-                    "content": sec[:2000],
-                    "path": fp,
-                })
+                for sub in re.split(r'\n###\s+', sec):
+                    if not sub.strip():
+                        continue
+                    idx += 1
+                    chunk_text = sub.strip()
+                    # Skip pure section skeletons (a heading with no body)
+                    # - they carry no evidence and only add retrieval noise.
+                    if len(chunk_text) < 40:
+                        continue
+                    ids = re.findall(r'\[([A-Z0-9\-]+)\]', chunk_text)
+                    sec_id = ids[0] if ids else f"{file_base}-{idx}"
+                    sec_id = sec_id.replace('_', '-').upper().strip()
+                    if not sec_id.startswith("DOC"):
+                        sec_id = f"DOC-{sec_id}"
+                    sec_id = re.sub(r'[^A-Z0-9\-]', '-', sec_id)
+                    sec_id = re.sub(r'-+', '-', sec_id)
+                    # Duplicate IDs break citation provenance (a reader could
+                    # not tell which chunk a [DOC-...] refers to), so make
+                    # duplicates unique deterministically and say so.
+                    if sec_id in seen_ids:
+                        seen_ids[sec_id] += 1
+                        sec_id = f"{sec_id}-{seen_ids[sec_id]}"
+                        print(f"[RAG] warning: duplicate chunk id in {fp}, "
+                              f"renamed to {sec_id}")
+                    else:
+                        seen_ids[sec_id] = 1
+                    heading = chunk_text.split('\n', 1)[0][:80]
+                    docs.append({
+                        "id": sec_id,
+                        "title": f"{root_title} - {heading}",
+                        "content": chunk_text[:2000],
+                        "path": fp,
+                        # Source provenance: which file this chunk came from,
+                        # surfaced in prompts and the alert API so a citation
+                        # is traceable to a real file (no hallucinated paths).
+                        "source": os.path.basename(fp),
+                        "section": heading,
+                    })
         self.documents = docs
         print(f"[RAG] Loaded {len(docs)} chunks from {len(files)} files")
 
