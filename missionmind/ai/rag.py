@@ -33,7 +33,7 @@ MIN_SCORE = 0.05
 # underscore-joined tokens).
 SYSTEM_KEYWORDS = {
     "power": ("solar", "battery", "voltage", "bus", "power", "load",
-              "soc", "charge", "array", "pdu", "eps", "sun"),
+              "soc", "charge", "array", "pdu", "eps", "sun", "eclipse"),
     "thermal": ("thermal", "radiator", "temperature", "heat", "epsilon",
                  "emissivity", "louver", "radiative", "cooling", "stefan"),
     "mission": ("mission", "rule", "risk", "procedure", "troubleshoot",
@@ -144,6 +144,11 @@ class RAGRetriever:
                   if any(k in q_low for k in keys)}
         if not scoped:
             return []
+        # The telemetry dictionary is cross-cutting reference material: any
+        # in-scope query may draw grounding from it (a thermal question about
+        # heat_in_w needs the dictionary entry, which is not a thermal-only
+        # document). Out-of-scope queries still get nothing.
+        scoped.add("telemetry")
         indices = [i for i, d in enumerate(self.documents)
                    if d.get("system") in scoped]
         if not indices:
@@ -205,7 +210,7 @@ def _system_for_file(fp: str) -> str:
     or new doc still gets scoped instead of silently escaping the filter.
     """
     base = os.path.basename(fp).lower()
-    for sys_ in ("power", "thermal", "mission"):
+    for sys_ in ("power", "thermal", "mission", "telemetry"):
         if sys_ in base:
             return sys_
     try:
