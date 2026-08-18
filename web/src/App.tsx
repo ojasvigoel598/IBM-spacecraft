@@ -175,6 +175,19 @@ export default function App() {
 
   const WINDOW = 900
 
+  // Honest Granite state from /api/health. "LIVE" is only shown after a real
+  // watsonx call has actually succeeded — a present key alone is not proof
+  // IBM answered (and a failed real call must never look like LIVE).
+  const graniteLabel = (h: Record<string, unknown> | null) => {
+    const g = (h?.granite ?? {}) as Record<string, unknown>
+    const mode = String(g.mode ?? 'MOCK')
+    const last = String(g.last_real_request ?? 'not_attempted')
+    if (mode === 'REAL_READY' && last === 'succeeded') return 'GRANITE LIVE'
+    if (mode === 'REAL_FAILED') return 'REAL FAILED · mock fallback'
+    if (mode === 'REAL_READY') return 'REAL READY · untested'
+    return 'MOCK FALLBACK'
+  }
+
   const fetchJson = useCallback(async (path: string) => {
     const r = await fetch(`${API}${path}`)
     if (!r.ok) throw new Error(`${r.status} ${path}`)
@@ -496,7 +509,7 @@ export default function App() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">watsonx.ai (Granite)</span>
-                  <span className="font-mono tnum">{health?.watsonx_key ? 'LIVE' : 'MOCK FALLBACK'}</span>
+                  <span className="font-mono tnum">{graniteLabel(health)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Edge stream</span>
@@ -858,7 +871,7 @@ export default function App() {
                 )}
                 <Separator className="my-3" />
                 <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                  <Badge variant="outline" className="font-mono text-[10px]">watsonx Granite: {health?.watsonx_key ? 'LIVE' : 'MOCK FALLBACK'}</Badge>
+                  <Badge variant="outline" className="font-mono text-[10px]">watsonx Granite: {graniteLabel(health)}</Badge>
                   <Badge variant="outline" className="font-mono text-[10px]">models on disk: {health?.models ? 'YES' : 'NO'}</Badge>
                   <Badge variant="outline" className="font-mono text-[10px]">API: {String(health?.status ?? '…')}</Badge>
                 </div>
