@@ -19,10 +19,32 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 KB_DIR = os.path.join(os.path.dirname(__file__), 'knowledge_base')
 
+# Minimum cosine score for a retrieved chunk to count as evidence. TF-IDF
+# cosine with this small curated corpus puts genuine matches >= ~0.1 and
+# in-scope noise below it; combined with the system-scope gate below it is
+# the second line of defense against answering from irrelevant chunks.
+MIN_SCORE = 0.05
+
+# Known knowledge-base systems and the query terms that scope retrieval to
+# them. A query that names no known system is out of scope for this KB and
+# returns no evidence (the system must refuse rather than guess). Matched by
+# plain substring so telemetry variable names like "solar_power_w" or
+# "battery_voltage_v" are recognized (word-boundary regex would miss the
+# underscore-joined tokens).
+SYSTEM_KEYWORDS = {
+    "power": ("solar", "battery", "voltage", "bus", "power", "load",
+              "soc", "charge", "array", "pdu", "eps", "sun"),
+    "thermal": ("thermal", "radiator", "temperature", "heat", "epsilon",
+                 "emissivity", "louver", "radiative", "cooling", "stefan"),
+    "mission": ("mission", "rule", "risk", "procedure", "troubleshoot",
+                 "evidence", "safe mode", "action", "threshold"),
+}
+
+
 class RAGRetriever:
     def __init__(self, kb_dir: str = KB_DIR):
         self.kb_dir = kb_dir
-        self.documents = []  # list of dict {id, title, content, path}
+        self.documents = []  # list of dict {id, title, content, path, source, system}
         self.vectorizer = None
         self.doc_vectors = None
         self._load_docs()
@@ -87,6 +109,10 @@ class RAGRetriever:
                         # is traceable to a real file (no hallucinated paths).
                         "source": os.path.basename(fp),
                         "section": heading,
+                        # System metadata enables metadata-scoped retrieval:
+                        # a power query never retrieves thermal evidence and
+                        # an out-of-scope query returns nothing at all.
+                        "system": _system_for_file(fp),
                     })
         self.documents = docs
         print(f"[RAG] Loaded {len(docs)} chunks from {len(files)} files")
@@ -98,26 +124,66 @@ class RAGRetriever:
         self.vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1,2))
         self.doc_vectors = self.vectorizer.fit_transform(corpus)
 
+
     def retrieve(self, query: str, top_k: int = 3) -> List[Dict]:
         """
-        Retrieve top_k docs relevant to query.
-        Query is constructed from anomaly report.
-        Returns list sorted by score desc.
+        Retrieve top_k docs relevant to query, metadata-scoped by system.
+
+        Scope: the query's terms are matched against SYSTEM_KEYWORDS. If the
+        query names no known system it is out of scope for this knowledge
+        base and NO evidence is returned - the system refuses rather than
+        guessing. If it names one or more systems, only chunks from those
+        systems are candidates, so a power query never returns thermal
+        evidence. Within the scoped candidates the top_k highest-scoring
+        chunks above MIN_SCORE are returned sorted by score desc.
         """
         if not self.documents or self.vectorizer is None:
             return []
+        q_low = query.lower()
+        scoped = {sys_ for sys_, keys in SYSTEM_KEYWORDS.items()
+                  if any(k in q_low for k in keys)}
+        if not scoped:
+            return []
+        indices = [i for i, d in enumerate(self.documents)
+                   if d.get("system") in scoped]
+        if not indices:
+            return []
         q_vec = self.vectorizer.transform([query])
-        scores = cosine_similarity(q_vec, self.doc_vectors).flatten()
-        # Get top indices
-        top_indices = scores.argsort()[-top_k:][::-1]
+        scores = cosine_similarity(q_vec, self.doc_vectors[indices]).flatten()
+        ranked = sorted(zip(indices, scores), key=lambda t: t[1], reverse=True)
         results = []
-        for i in top_indices:
-            if scores[i] < 0.05:  # threshold
+        for i, s in ranked:
+            if s < MIN_SCORE:
                 continue
             doc = self.documents[i].copy()
-            doc["score"] = float(scores[i])
+            doc["score"] = float(s)
             results.append(doc)
+            if len(results) >= top_k:
+                break
         return results
+
+
+def _system_for_file(fp: str) -> str:
+    """Map a knowledge-base file to its system metadata by filename.
+
+    Falls back to scanning the file's text for system keywords so a renamed
+    or new doc still gets scoped instead of silently escaping the filter.
+    """
+    base = os.path.basename(fp).lower()
+    for sys_ in ("power", "thermal", "mission"):
+        if sys_ in base:
+            return sys_
+    try:
+        with open(fp, 'r', encoding='utf-8') as f:
+            text = f.read().lower()
+    except OSError:
+        return "mission"
+    best, best_hits = None, 0
+    for sys_, keys in SYSTEM_KEYWORDS.items():
+        hits = sum(1 for k in keys if k in text)
+        if hits > best_hits:
+            best, best_hits = sys_, hits
+    return best or "mission"
 
     def query_from_anomaly(self, anomaly_input: dict, top_k: int = 3):
         """
