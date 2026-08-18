@@ -100,7 +100,7 @@ GOLDEN_QUESTIONS: List[Dict] = [
     # --- physics ---
     {
         "id": "q-physics-thermal-equilibrium",
-        "question": "How is the radiator equilibrium temperature determined?",
+        "question": "What is the equilibrium condition for the radiator in the thermal model?",
         "qtype": "physics",
         "expected": ["DOC-THERMAL-SUBSYSTEM-2", "DOC-THERM-NOM-001"],
         "note": "Overview states the equilibrium condition Q_in = Q_out; Normal Operation gives the numeric result.",
