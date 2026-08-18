@@ -91,6 +91,65 @@ def test_ml_flag_absent_stays_nominal():
     assert "Nominal operation" in out["probable_cause"]
 
 
+def test_parse_granite_json_handles_wrapping_and_garbage():
+    """Real Granite output may be markdown-wrapped or contain prose; the
+    extractor must survive that and must never crash on garbage."""
+    from missionmind.ai.granite_client import _parse_granite_json
+    assert _parse_granite_json('{"risk": "HIGH"}')["risk"] == "HIGH"
+    assert _parse_granite_json('```json\n{"risk": "MEDIUM"}\n```')["risk"] == "MEDIUM"
+    assert _parse_granite_json('Here is the analysis:\n{"risk": "LOW", "reasoning": "x"}')["risk"] == "LOW"
+    assert _parse_granite_json("no json here") is None
+    assert _parse_granite_json("[1,2,3]") is None
+    assert _parse_granite_json('{"risk": "HIGH"') is None  # truncated
+    assert _parse_granite_json("") is None
+
+
+def test_strict_mode_requires_credentials_and_never_mocks():
+    """The credentialed smoke test must fail loudly (raise) when credentials
+    are absent — it can never pass on the mock. Deterministic regardless of
+    whether a .env with real credentials exists on this machine."""
+    saved = {k: os.environ.get(k)
+             for k in ("WATSONX_APIKEY", "WATSONX_API_KEY", "WATSONX_PROJECT_ID")}
+    for k in saved:
+        os.environ.pop(k, None)
+    try:
+        from missionmind.ai.granite_client import generate_explanation, GraniteRequestError
+        from missionmind.ai.prompts import example_input_json
+        try:
+            generate_explanation(example_input_json(), use_rag=False, strict=True)
+            raise AssertionError("strict mode must raise when credentials are missing")
+        except GraniteRequestError as e:
+            assert "WATSONX_APIKEY" in str(e), str(e)
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def test_mock_output_is_explicitly_tagged():
+    """The demo fallback must be tagged source=mock so callers can never
+    mistake it for real IBM inference."""
+    from missionmind.ai.granite_client import generate_explanation
+    from missionmind.ai.prompts import example_input_json
+    out = generate_explanation(example_input_json(), use_rag=False)
+    assert out.get("source") == "mock", out.get("source")
+
+
+def test_check_config_reports_mode_and_current_model_default():
+    """check_config() must expose the mode state machine and resolve the
+    model to a current catalogue ID (never the withdrawn granite-3-2b)."""
+    from missionmind.ai.granite_client import check_config, GRANITE_DEFAULT_MODEL
+    cfg = check_config()
+    assert cfg["mode"] in ("MOCK", "REAL_READY")
+    assert cfg["last_real_request"] in ("not_attempted", "succeeded") \
+        or cfg["last_real_request"].startswith("failed:")
+    assert cfg["model_id"] == os.getenv("WATSONX_MODEL_ID", GRANITE_DEFAULT_MODEL)
+    assert cfg["model_id"] == GRANITE_DEFAULT_MODEL, \
+        "default model must be a current watsonx Granite model"
+
+
 def test_check_config_shape_and_readiness_contract():
     """check_config() must report the same readiness the code uses to decide
     between a real watsonx call and the mock fallback."""
@@ -115,7 +174,11 @@ if __name__ == "__main__":
              test_nominal_soc_renders_in_solar_branch,
              test_ml_flag_prevents_nominal_verdict_when_detector_flags,
              test_ml_flag_absent_stays_nominal,
-             test_check_config_shape_and_readiness_contract]
+             test_check_config_shape_and_readiness_contract,
+             test_parse_granite_json_handles_wrapping_and_garbage,
+             test_strict_mode_requires_credentials_and_never_mocks,
+             test_mock_output_is_explicitly_tagged,
+             test_check_config_reports_mode_and_current_model_default]
     failed = []
     for t in tests:
         try:

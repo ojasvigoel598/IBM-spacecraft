@@ -39,6 +39,65 @@ except Exception as e:
     WATSONX_AVAILABLE = False
     # print(f"watsonx SDK not available: {e}")
 
+# Current IBM watsonx.ai deploy-on-demand Granite model. The Granite 3.0/3.2-era
+# instruct models (e.g. ibm/granite-3-2b-instruct) have been withdrawn from the
+# multitenant catalogue (IBM deprecation notices, 2026); granite-4-h-small is
+# IBM's current small hybrid instruct model and the one IBM's own docs sample
+# with ModelInference. Override with WATSONX_MODEL_ID when a different model or
+# region is required — the app always reports which model it is using.
+GRANITE_DEFAULT_MODEL = "ibm/granite-4-h-small"
+
+# Outcome of the most recent real watsonx attempt, surfaced by /api/health and
+# check_config so a judge can distinguish MOCK / READY / REQUEST-FAILED without
+# any credential being exposed. Values: "not_attempted" | "succeeded" |
+# "failed:auth" | "failed:model" | "failed:timeout" | "failed:network" |
+# "failed:unknown".
+_last_real_state: str = "not_attempted"
+
+
+class GraniteRequestError(RuntimeError):
+    """A real watsonx Granite request was attempted and failed. Raised only by
+    the strict path (credentialed smoke test); the demo path returns a tagged
+    mock instead so the dashboard keeps working without IBM."""
+
+
+def _classify_granite_error(exc: Exception) -> str:
+    """Coarse error category (auth/model/timeout/network/unknown) so callers
+    can distinguish failure modes without surfacing the raw SDK message."""
+    low = f"{type(exc).__name__}: {exc}".lower()
+    if isinstance(exc, TimeoutError) or "timeout" in low:
+        return "timeout"
+    if any(k in low for k in ("unauthorized", "401", "apikey", "api_key",
+                              "authentication", "invalid api")):
+        return "auth"
+    if any(k in low for k in ("not found", "404", "deploy", "not available",
+                              "not supported", "model id")):
+        return "model"
+    if any(k in low for k in ("connection", "network", "dns", "ssl",
+                              "refused", "unreachable")):
+        return "network"
+    return "unknown"
+
+
+def _parse_granite_json(raw_output: str) -> Optional[Dict]:
+    """Extract a JSON object from Granite text output.
+
+    Granite is instructed to return JSON only, but may wrap it in markdown
+    fences or add prose. Extract the outermost {...} span and parse it;
+    return None (never raise) when no valid object is present.
+    """
+    if not raw_output:
+        return None
+    start = raw_output.find("{")
+    end = raw_output.rfind("}")
+    if start == -1 or end <= start:
+        return None
+    try:
+        parsed = json.loads(raw_output[start:end + 1])
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
 def _mock_granite_response(anomaly_input: dict, retrieved_docs: Optional[List[Dict]] = None) -> Dict:
     """
     Deterministic fallback that produces valid JSON matching spec schema,
@@ -129,22 +188,23 @@ def _mock_granite_response(anomaly_input: dict, retrieved_docs: Optional[List[Di
 
     return result
 
-def _call_watsonx_granite(system_prompt: str, user_prompt: str, model_id: Optional[str] = None) -> str:
+def _call_watsonx_granite(system_prompt: str, user_prompt: str,
+                          model_id: Optional[str] = None,
+                          timeout_s: float = 45.0) -> str:
     """
     Real watsonx call - adaptable to current SDK.
     Looks up env vars: WATSONX_APIKEY, WATSONX_PROJECT_ID, WATSONX_URL (optional),
-    WATSONX_MODEL_ID (optional, defaults to ibm/granite-3-2b-instruct).
-    Returns raw text output.
+    WATSONX_MODEL_ID (optional, defaults to GRANITE_DEFAULT_MODEL).
+    Returns raw text output. Raises on any failure (never mocks).
     """
     if model_id is None:
-        model_id = os.getenv("WATSONX_MODEL_ID", "ibm/granite-3-2b-instruct")
+        model_id = os.getenv("WATSONX_MODEL_ID", GRANITE_DEFAULT_MODEL)
     api_key = os.getenv("WATSONX_APIKEY") or os.getenv("WATSONX_API_KEY")
     project_id = os.getenv("WATSONX_PROJECT_ID")
     url = os.getenv("WATSONX_URL", "https://us-south.ml.cloud.ibm.com")
 
     if not api_key or not project_id:
         raise RuntimeError("WATSONX credentials missing")
-
     if not WATSONX_AVAILABLE:
         raise RuntimeError("ibm-watsonx-ai SDK not installed")
 
@@ -157,19 +217,43 @@ def _call_watsonx_granite(system_prompt: str, user_prompt: str, model_id: Option
     )
     # Combine system + user as prompt - Granite instruct expects chat format
     full_prompt = f"<|system|>\n{system_prompt}\n<|user|>\n{user_prompt}\n<|assistant|>\n"
-    response = model.generate_text(prompt=full_prompt)
-    return response
+    # Application-level timeout: the SDK exposes no per-call timeout, and a
+    # hung IBM request must not stall the dashboard or API forever. The pool
+    # is shut down without waiting so a genuinely stuck SDK call cannot hold
+    # the caller hostage after we have already given up on it.
+    import concurrent.futures
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = pool.submit(model.generate_text, prompt=full_prompt)
+    try:
+        return future.result(timeout=timeout_s)
+    except concurrent.futures.TimeoutError:
+        raise TimeoutError(
+            f"watsonx Granite call exceeded {timeout_s:.0f}s timeout")
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
-def generate_explanation(anomaly_input: dict, use_rag: bool = True, top_k: int = 3) -> Dict:
+def generate_explanation(anomaly_input: dict, use_rag: bool = True, top_k: int = 3,
+                         strict: bool = False) -> Dict:
     """
     Main entry point used by Streamlit app and pipeline.
 
     Steps:
     1. Retrieve evidence via RAG if enabled
     2. Build prompt (RAG-enhanced or base)
-    3. Try watsonx call, else fallback mock that still returns valid JSON + evidence
+    3. Try the real watsonx call when credentials are present
     4. Validate JSON schema
+
+    strict=False (demo/dashboard default): a real-call failure falls back to
+    the deterministic mock, but the result is tagged source="mock" with a
+    sanitized granite_error so callers can never mistake it for real IBM
+    inference.
+
+    strict=True (credentialed smoke test): requires credentials AND a
+    successful real call. On any failure it raises GraniteRequestError — it
+    never silently substitutes the mock, so a smoke test can only pass when
+    IBM actually answered.
     """
+    global _last_real_state
     retrieved_docs = []
     if use_rag:
         try:
@@ -187,54 +271,97 @@ def generate_explanation(anomaly_input: dict, use_rag: bool = True, top_k: int =
         system_prompt = SYSTEM_PROMPT_BASE
         user_prompt = build_user_prompt(anomaly_input)
 
-    # Attempt real Granite call if credentials present
-    raw_output = None
-    use_real = WATSONX_AVAILABLE and os.getenv("WATSONX_APIKEY") and os.getenv("WATSONX_PROJECT_ID")
+    has_key = bool(os.getenv("WATSONX_APIKEY") or os.getenv("WATSONX_API_KEY"))
+    use_real = WATSONX_AVAILABLE and has_key and os.getenv("WATSONX_PROJECT_ID")
+
+    # Strict mode: credentials are REQUIRED — fail clearly, never mock.
+    if strict and not use_real:
+        missing = []
+        if not WATSONX_AVAILABLE:
+            missing.append("ibm-watsonx-ai SDK")
+        if not has_key:
+            missing.append("WATSONX_APIKEY")
+        if not os.getenv("WATSONX_PROJECT_ID"):
+            missing.append("WATSONX_PROJECT_ID")
+        raise GraniteRequestError(
+            "Real Granite smoke test requires: " + ", ".join(missing)
+            + " (set them in .env — never committed)")
+
     if use_real:
         try:
             raw_output = _call_watsonx_granite(system_prompt, user_prompt)
-            # Parse JSON
-            # Granite should return JSON only, but be robust
-            start = raw_output.find("{")
-            end = raw_output.rfind("}") + 1
-            if start != -1 and end != 0:
-                json_str = raw_output[start:end]
-                parsed = json.loads(json_str)
-                # Validate required fields
-                required = {"risk","probable_cause","reasoning","recommended_action"}
-                if required.issubset(parsed.keys()):
-                    if retrieved_docs:
-                        parsed.setdefault("evidence_used", [d["id"] for d in retrieved_docs])
-                        parsed.setdefault("confidence", anomaly_input.get("physics_confidence",0.8))
-                        parsed.setdefault("retrieved_docs", [{"id": d["id"], "title": d["title"]} for d in retrieved_docs])
-                    return parsed
-                else:
-                    print(f"[Granite] Missing fields, fallback to mock. Got {parsed.keys()}")
-            else:
-                print(f"[Granite] No JSON found in output: {raw_output[:200]}")
+            parsed = _parse_granite_json(raw_output)
+            required = {"risk", "probable_cause", "reasoning", "recommended_action"}
+            if parsed is None or not required.issubset(parsed.keys()):
+                raise ValueError(
+                    "Granite response missing required fields "
+                    f"(got {sorted(parsed.keys()) if parsed else 'no JSON'})")
+            # Enforce the same value contract the mock guarantees, so the
+            # dashboard never renders an unexpected risk level.
+            parsed["risk"] = parsed.get("risk", "MEDIUM").upper()
+            if parsed["risk"] not in ("LOW", "MEDIUM", "HIGH"):
+                parsed["risk"] = "MEDIUM"
+            for key in ("probable_cause", "reasoning", "recommended_action"):
+                if not isinstance(parsed.get(key), str) or not parsed[key].strip():
+                    raise ValueError(f"Granite field '{key}' is empty or not text")
+            if retrieved_docs:
+                parsed.setdefault("evidence_used", [d["id"] for d in retrieved_docs])
+                parsed.setdefault("confidence", anomaly_input.get("physics_confidence", 0.8))
+                parsed.setdefault("retrieved_docs",
+                                  [{"id": d["id"], "title": d["title"]} for d in retrieved_docs])
+            parsed["source"] = "watsonx"
+            _last_real_state = "succeeded"
+            return parsed
         except Exception as e:
-            print(f"[Granite] watsonx call failed: {e}, using mock")
+            _last_real_state = "failed:" + _classify_granite_error(e)
+            if strict:
+                raise GraniteRequestError(
+                    f"Real watsonx Granite request FAILED ({_last_real_state}). "
+                    f"The mock was NOT substituted. {type(e).__name__}") from e
+            print(f"[Granite] watsonx call failed ({_last_real_state}): "
+                  f"{type(e).__name__}, using tagged mock")
+    elif strict:  # unreachable: strict+not use_real raises above
+        raise GraniteRequestError("Granite credentials/SDK unavailable")
 
-    # Fallback mock - always valid
+    # Fallback mock - always valid, always explicitly tagged as mock.
     mock_result = _mock_granite_response(anomaly_input, retrieved_docs if use_rag else None)
+    mock_result["source"] = "mock"
+    if use_real:
+        # credentials were present but the real call failed -> say why
+        mock_result["granite_error"] = _last_real_state
     return mock_result
 
 def check_config() -> Dict:
     """Report whether a real watsonx Granite call is possible right now.
 
     Returns plain booleans/strings so the dashboard, tests, and the --check
-    CLI can all use the same truth. No network is touched.
+    CLI can all use the same truth. No network is touched, no credentials
+    are returned.
     """
     api_key = os.getenv("WATSONX_APIKEY") or os.getenv("WATSONX_API_KEY")
     project_id = os.getenv("WATSONX_PROJECT_ID")
+    ready = bool(WATSONX_AVAILABLE and api_key and project_id)
     return {
         "sdk_installed": bool(WATSONX_AVAILABLE),
         "api_key_present": bool(api_key),
         "project_id_present": bool(project_id),
         "url": os.getenv("WATSONX_URL", "https://us-south.ml.cloud.ibm.com"),
-        "model_id": os.getenv("WATSONX_MODEL_ID", "ibm/granite-3-2b-instruct"),
-        "ready_for_real_call": bool(WATSONX_AVAILABLE and api_key and project_id),
+        "model_id": os.getenv("WATSONX_MODEL_ID", GRANITE_DEFAULT_MODEL),
+        "ready_for_real_call": ready,
+        # Clear top-level state for judges: MOCK (will never touch IBM),
+        # REAL_READY (credentials+SDK present, call not yet proven),
+        # REAL_FAILED (credentials present but the last real call failed).
+        "mode": "REAL_READY" if ready else "MOCK",
+        "last_real_request": _last_real_state,
     }
+
+
+def granite_status() -> Dict:
+    """Public status dict for /api/health — never includes credentials."""
+    cfg = check_config()
+    if cfg["mode"] == "REAL_READY" and cfg["last_real_request"].startswith("failed"):
+        cfg["mode"] = "REAL_FAILED"
+    return cfg
 
 if __name__ == "__main__":
     import argparse
@@ -266,15 +393,20 @@ if __name__ == "__main__":
             print("Paste the key and project id into .env, then re-run this check.")
             raise SystemExit(1)
         print("\nConfig looks ready. Making a real Granite call to verify the key...")
+        print(f"Model: {cfg['model_id']}  URL: {cfg['url']}")
         from .prompts import example_input_json
         try:
-            out = generate_explanation(example_input_json(), use_rag=True)
+            # STRICT: the smoke test must never substitute the mock — it can
+            # only pass when IBM actually answered with schema-valid JSON.
+            out = generate_explanation(example_input_json(), use_rag=True, strict=True)
+            assert out.get("source") == "watsonx", f"expected a real call, got {out.get('source')}"
             print(json.dumps(out, indent=2))
             print("\nCHECK PASS: real watsonx Granite call succeeded.")
         except Exception as e:
             print(f"\nCHECK FAIL: {e}")
-            print("The key or project id may be wrong, or the model is not deployable"
-                  " in your watsonx project. Fix .env and re-run.")
+            print("The key or project id may be wrong, the model may not be deployable"
+                  " in your watsonx project, or the model is not available in the"
+                  " configured region. Fix .env and re-run.")
             raise SystemExit(1)
         raise SystemExit(0)
 
