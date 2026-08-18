@@ -70,7 +70,7 @@ RAG Layer:
 
 Granite Layer:
   prompts.py: SYSTEM_PROMPT_BASE (spec §8) + SYSTEM_PROMPT_RAG (adds citations requirement)
-  granite_client.py: _mock_granite_response() detailed physics deltas (net, dSOC, Q_in vs Q_out, equilibrium), _call_watsonx_granite() uses ibm-watsonx-ai ModelInference ibm/granite-3-2b-instruct, params greedy 500 tokens temp 0.2, generate_explanation() tries real if env vars present else mock, always valid JSON risk/cause/reasoning/action/evidence_used/confidence/retrieved_docs
+  granite_client.py: _mock_granite_response() detailed physics deltas (net, dSOC, Q_in vs Q_out, equilibrium), _call_watsonx_granite() uses ibm-watsonx-ai ModelInference ibm/granite-4-h-small (WATSONX_MODEL_ID override), params greedy 500 tokens temp 0.2, generate_explanation() tries real if env vars present else a tagged mock (source="mock"; strict=True raises instead of mocking), always valid JSON risk/cause/reasoning/action/evidence_used/confidence/retrieved_docs
 
 Viz Layer:
   app.py: Streamlit Mission Control v2, tabs Live Telemetry (Plotly 3 subplots), Physics Deep Dive, ML Deep Dive (z-scores), RAG Evidence, Granite Explanation, Scenario Comparison, watsonx Code. Top live failure buttons → run_scenario() live generation → score_dataframe() → RAG → Granite → Three.js JSON injection → graphs. Three.js embedded via components.html importmap three@0.160 + OrbitControls, PBR materials, shadows, ACESFilmic, CubeSat 3U gold MLI, deployable panels with cell grid + crack, radiator fins, UHF 4 monopoles, S-band patch, camera, battery glow SOC color/scale, beacon, hull outline

@@ -49,7 +49,7 @@ Most spacecraft-AI demos showcase a single technique. This repo wires several to
 | **Physics simulator** | Coupled power + thermal ODE solver; configurable fault injection | `mc_p = 5000 J/K`, `r_final = 0.30` toggleable via `MISSIONMIND_PHYSICS_SPEC=1` |
 | **ML ensemble** | Isolation Forest, LOF, OC-SVM, MLP-AE, Hybrid DIF, FCNN, XGBOD | Held-out contamination of 0.05 |
 | **RAG** | TF-IDF over a hand-curated markdown knowledge base | Top-k docs pulled live per anomaly, each chunk citeable |
-| **Granite (`ibm/granite-3-2b-instruct`)** | watsonx.ai JSON output with cited evidence | Falls back to a deterministic mock when `WATSONX_APIKEY` is unset; the sidebar shows which mode is active |
+| **Granite (`ibm/granite-4-h-small`)** | watsonx.ai JSON output with cited evidence | Falls back to a **tagged** deterministic mock when `WATSONX_APIKEY` is unset; the sidebar/web console show which mode is active, and a real-call failure is never disguised as IBM |
 | **Streamlit + Three.js** | Mission-control dashboard with a real IBM satellite CAD | Time scrubber, RUL chip, 4-line causal alert, live physics + ML + RAG |
 
 The full pipeline is reproducible from one command:
@@ -80,7 +80,7 @@ streamlit run missionmind/viz/app.py                  # Streamlit + Three.js 3D 
 
 # 5. optional: real Granite on watsonx.ai (everything runs on the mock without this)
 cp .env.example .env                                   # then fill in WATSONX_APIKEY + WATSONX_PROJECT_ID
-python -m missionmind.ai.granite_client --check        # "CHECK PASS" = key works; restart the dashboard after
+python -m missionmind.ai.granite_client --check        # makes ONE real call; "CHECK PASS" only if IBM actually answers (never the mock)
 
 # web mission-control console (React + shadcn/ui + Tailwind)
 python -m uvicorn missionmind.viz.api_server:app --port 8100   # JSON API on the same pipeline
@@ -102,8 +102,9 @@ Open `http://localhost:8501`. The 3D spacecraft CAD loads inside the dashboard; 
 | Variable | Effect |
 |---|---|
 | `MISSIONMIND_DEMO_FAST=1` | Opts into the legacy demo-tuned constants (`mc_p=2000 J/K`, exaggerated 10% radiator fault). **Default is the physically justified spec values** (`mc_p=5000 J/K`, `r_final=0.30`); the demo values are labelled controlled injected faults, not nominal physics. |
-| `WATSONX_APIKEY`, `WATSONX_PROJECT_ID` | Real `ibm/granite-3-2b-instruct` call instead of the deterministic mock fallback. |
-| `WATSONX_MODEL_ID` | Defaults to `ibm/granite-3-2b-instruct`; any model ID on watsonx.ai works. |
+| `WATSONX_APIKEY`, `WATSONX_PROJECT_ID` | Real `ibm/granite-4-h-small` call instead of the deterministic mock fallback. |
+| `WATSONX_MODEL_ID` | Defaults to `ibm/granite-4-h-small`; any model ID on watsonx.ai works. |
+| `MISSIONMIND_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to call the FastAPI backend (CORS). Unset = local dev origins only (Streamlit `:8501`, Vite `:5173`, API `:8100`). Set this to your Vercel URL when deployed — wildcard CORS is never used. |
 
 ---
 
@@ -128,6 +129,23 @@ scoring works with no training step.
 The Streamlit dashboard is a Python server app and does not run on Vercel;
 use it locally (`streamlit run missionmind/viz/app.py`) or on Streamlit
 Community Cloud.
+
+### Security
+
+- **CORS is origin-restricted, not wildcard.** The FastAPI backend
+  (`missionmind/viz/api_server.py`) allows only local dev origins by default
+  and a configured list via `MISSIONMIND_ALLOWED_ORIGINS`; it advertises only
+  `GET`/`OPTIONS` (the API is read-only). Set the env var to your Vercel URL
+  when deployed.
+- **IBM credentials stay server-side.** `WATSONX_APIKEY` / `WATSONX_PROJECT_ID`
+  are read only in `missionmind/ai/granite_client.py` and are never exposed by
+  `/api/health` (it returns booleans and the model ID, never the key), never
+  shipped to the browser, and never logged. `.env` is gitignored and only the
+  empty `.env.example` template is committed.
+- **No stack traces reach users.** FastAPI returns generic 500s; RAG, ML
+  explanation, and decision-layer failures degrade to safe fallbacks.
+- **Secrets are refused in CI**: the pre-commit hook and the Actions workflow
+  scan for key patterns and fail on any committed secret.
 
 ---
 
@@ -197,11 +215,11 @@ Three decisions that shaped the system, each with the on-disk evidence that just
 
 **Status:** Accepted · **Date:** 2026-08
 
-**Context.** The explanation layer calls `ibm/granite-3-2b-instruct` on watsonx.ai. Credentials are not guaranteed in a demo or CI environment, and a hard-fail would break the entire dashboard whenever the API is unreachable. The system must stay operational without the LLM, and must never present mock output as real.
+**Context.** The explanation layer calls `ibm/granite-4-h-small` (override with `WATSONX_MODEL_ID`) on watsonx.ai. Credentials are not guaranteed in a demo or CI environment, and a hard-fail would break the entire dashboard whenever the API is unreachable. The system must stay operational without the LLM, and must never present mock output as real.
 
-**Decision.** `generate_explanation()` tries the real watsonx call only when `WATSONX_AVAILABLE` and both credentials are present; on any failure it falls back to a deterministic rule-based mock that always returns schema-valid JSON. The UI surfaces the fallback honestly (sidebar shows `API Key: missing (mock fallback)`).
+**Decision.** `generate_explanation(strict=False)` (dashboard default) tries the real watsonx call only when the SDK and both credentials are present; on any failure it falls back to a deterministic rule-based mock that always returns schema-valid JSON and is **explicitly tagged `source="mock"`**. The UI surfaces the fallback honestly (sidebar shows `API Key: missing (mock fallback)`; the web console shows GRANITE LIVE only after a real call succeeded). `generate_explanation(strict=True)` — used by `python -m missionmind.ai.granite_client --check` — requires credentials AND a successful real call and raises on failure; it never substitutes the mock, so the smoke test can only pass when IBM actually answered.
 
-**Evidence.** Fallback policy: `missionmind/ai/granite_client.py:6-7` (docstring), `granite_client.py:26-28` (`WATSONX_AVAILABLE`), `granite_client.py:31-33` (deterministic mock), `granite_client.py:178` (real-call gate), `granite_client.py:202-204` (failure to mock, always valid). Behavior tests: `missionmind/tests/test_granite_nominal.py:53-87` (nominal/solar branches and the `ml_flag` guard). UI honesty contract: see Granite grounding below.
+**Evidence.** Fallback policy: `missionmind/ai/granite_client.py` (`_call_watsonx_granite` is the only real-network path; `generate_explanation` gates on `WATSONX_AVAILABLE` + credentials and tags the mock; `strict=True` raises `GraniteRequestError`). State machine: `check_config()`/`granite_status()` (MOCK / REAL_READY / REAL_FAILED) surfaced by `/api/health` and the web console. Behavior tests: `missionmind/tests/test_granite_nominal.py` (nominal/solar branches, `ml_flag` guard, strict-never-mocks, mock tagging, JSON parsing, mode contract).
 
 ---
 
@@ -304,7 +322,7 @@ Granite is not used as an anomaly detector. The ML ensemble + physics rules are 
 1. The retriever sees the current anomaly row plus the physics-rule hits.
 2. It returns the top-k markdown chunks from `missionmind/ai/knowledge_base/*.md`, each scored by TF-IDF.
 3. The system prompt declares the contract: output JSON with `diagnosis, evidence, recommended_action, risk` and `citations` arrays linking back to the chunks.
-4. `ibm/granite-3-2b-instruct` fills that contract; the dashboard parses and displays the result.
+4. `ibm/granite-4-h-small` (override with `WATSONX_MODEL_ID`) fills that contract; the dashboard parses and displays the result.
 
 If `WATSONX_APIKEY` is not set, the sidebar shows `API Key: missing (mock fallback)` and the function uses a deterministic mock that returns the same JSON shape with the RAG chunks surfaced as citations, so it is always obvious whether the output came from a real LLM call or the mock.
 
@@ -439,11 +457,11 @@ Fresh-checkout behaviour:
 
 | What | Where |
 |---|---|
-| Model ID | `ibm/granite-3-2b-instruct` |
+| Model ID | `ibm/granite-4-h-small` (override with `WATSONX_MODEL_ID`) |
 | Auth | `WATSONX_APIKEY` (env) + `WATSONX_PROJECT_ID` (env) |
 | Code | `missionmind/ai/granite_client.py`: `_call_watsonx_granite()` is the only real-network path |
 | Mock | `generate_explanation(...)` falls back to a deterministic mock that still returns schema-correct JSON with RAG citations; the sidebar shows which mode is active |
-| Verify a key | `python -m missionmind.ai.granite_client --check` reports config and makes a real call when a key is set |
+| Verify a key | `python -m missionmind.ai.granite_client --check` reports config, then makes ONE real call — it can only report CHECK PASS if IBM actually answered (strict mode never substitutes the mock) |
 | RAG corpus | `missionmind/ai/knowledge_base/{power_subsystem, thermal_subsystem, mission_rules}.md` |
 | Citations | Granite is asked to fill a `citations[]` array linking each claim to a TF-IDF chunk, so each dashboard claim is traceable to a file |
 
