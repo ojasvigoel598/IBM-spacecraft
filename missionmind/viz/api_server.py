@@ -38,11 +38,34 @@ SCENARIO_LABELS = {
     "radiator_degradation": "Radiator Degradation",
 }
 
+def _allowed_origins() -> List[str]:
+    """Origins allowed to call this API from a browser.
+
+    The web frontend talks to /api/* same-origin (Vite proxy locally, Vercel
+    rewrites in production) and the Streamlit dashboard fetches server-side,
+    so a CORS allowlist is only exercised by direct browser access / embedded
+    clients. Default to local development origins; for a deployed origin set
+    MISSIONMIND_ALLOWED_ORIGINS to a comma-separated list (e.g. the Vercel
+    deployment URL). Wildcard is intentionally NOT the default: a publicly
+    deployed API must not accept browser requests from any origin.
+    """
+    raw = os.getenv("MISSIONMIND_ALLOWED_ORIGINS", "").strip()
+    if raw:
+        return [o.strip() for o in raw.split(",") if o.strip()]
+    return [
+        "http://localhost:8501", "http://127.0.0.1:8501",  # Streamlit dashboard
+        "http://localhost:5173", "http://127.0.0.1:5173",  # Vite dev server
+        "http://localhost:8100", "http://127.0.0.1:8100",  # API docs / dev
+    ]
+
+
 app = FastAPI(title="MissionMind API", version="2.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=_allowed_origins(),
+    # The API surface is read-only (GET / OPTIONS only); browsers must not
+    # be able to POST/PUT/DELETE cross-origin even if an origin is allowed.
+    allow_methods=["GET", "OPTIONS"],
     allow_headers=["*"],
 )
 

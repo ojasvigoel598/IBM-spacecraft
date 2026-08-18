@@ -174,6 +174,56 @@ def test_live_stream_total_advances_but_retained_is_bounded():
     assert retained_before < total_before, "retained must not equal total once past the cap"
 
 
+def test_cors_blocks_unknown_origins():
+    """A browser from an origin outside the allowlist must NOT receive CORS
+    headers (so it cannot read the response). Regression for the old
+    allow_origins=["*"] configuration."""
+    r = client.get("/api/health", headers={"Origin": "http://evil.example"})
+    assert r.status_code == 200
+    assert "access-control-allow-origin" not in r.headers, \
+        "unknown origin must not be CORS-allowed"
+
+
+def test_cors_allows_local_dashboard_origin():
+    """The Streamlit dashboard origin (localhost:8501) is in the default
+    allowlist and must receive an echoed Access-Control-Allow-Origin."""
+    r = client.get("/api/health", headers={"Origin": "http://localhost:8501"})
+    assert r.status_code == 200
+    assert r.headers.get("access-control-allow-origin") == "http://localhost:8501"
+
+
+def test_cors_allowlist_is_env_configurable():
+    """Deployed origins are configured via MISSIONMIND_ALLOWED_ORIGINS; the
+    default must never be the wildcard, and a configured origin must work."""
+    import missionmind.viz.api_server as api_mod
+    assert api_mod._allowed_origins(), "allowlist must not be empty"
+    assert "*" not in api_mod._allowed_origins(), "wildcard CORS is forbidden"
+
+    old = os.environ.get("MISSIONMIND_ALLOWED_ORIGINS")
+    try:
+        os.environ["MISSIONMIND_ALLOWED_ORIGINS"] = \
+            "https://missionmind.vercel.app, http://localhost:3000"
+        parsed = api_mod._allowed_origins()
+        assert parsed == ["https://missionmind.vercel.app", "http://localhost:3000"], parsed
+    finally:
+        if old is None:
+            os.environ.pop("MISSIONMIND_ALLOWED_ORIGINS", None)
+        else:
+            os.environ["MISSIONMIND_ALLOWED_ORIGINS"] = old
+
+
+def test_cors_methods_are_read_only():
+    """The API is GET-only; the CORS middleware must not advertise write
+    methods to browsers."""
+    r = client.options("/api/health", headers={
+        "Origin": "http://localhost:8501",
+        "Access-Control-Request-Method": "POST",
+    })
+    allowed = r.headers.get("access-control-allow-methods", "")
+    assert "POST" not in allowed, f"POST must not be CORS-advertised: {allowed}"
+    assert "GET" in allowed, f"GET must be CORS-advertised: {allowed}"
+
+
 if __name__ == "__main__":
     tests = [test_alert_solar_fault_window_returns_evidence,
              test_alert_unknown_mode_returns_404,
@@ -181,7 +231,11 @@ if __name__ == "__main__":
              test_alert_active_has_operator_narrative,
              test_alert_carries_adaptive_decision_block,
              test_trace_records_live_execution_and_scoring,
-             test_live_stream_total_advances_but_retained_is_bounded]
+             test_live_stream_total_advances_but_retained_is_bounded,
+             test_cors_blocks_unknown_origins,
+             test_cors_allows_local_dashboard_origin,
+             test_cors_allowlist_is_env_configurable,
+             test_cors_methods_are_read_only]
     failed = []
     for t in tests:
         try:
