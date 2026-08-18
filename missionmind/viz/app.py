@@ -36,7 +36,7 @@ except ImportError:
 
 from missionmind.physics_rules.rules import check_power_subsystem, check_thermal_subsystem, slope, P_SOLAR_MAX
 from missionmind.ml.detect import score_dataframe, load_models
-from missionmind.ai.granite_client import generate_explanation, WATSONX_AVAILABLE
+from missionmind.ai.granite_client import generate_explanation, WATSONX_AVAILABLE, GRANITE_DEFAULT_MODEL
 from missionmind.ai.rag import get_retriever
 from missionmind.ai.prompts import SYSTEM_PROMPT_BASE, SYSTEM_PROMPT_RAG, build_user_prompt, build_rag_user_prompt
 from missionmind.simulator.thermal import SIGMA
@@ -228,10 +228,11 @@ with st.sidebar:
     st.subheader("🔌 IBM watsonx.ai")
     api_key_present = bool(os.getenv("WATSONX_APIKEY") or os.getenv("WATSONX_API_KEY"))
     proj_present = bool(os.getenv("WATSONX_PROJECT_ID"))
+    _model_id = os.getenv("WATSONX_MODEL_ID", GRANITE_DEFAULT_MODEL)
     st.write(f"SDK installed: **{WATSONX_AVAILABLE}**")
     st.write(f"API Key: **{'✅ present' if api_key_present else '❌ missing (mock fallback)'}**")
     st.write(f"Project ID: **{'✅ present' if proj_present else '❌ missing'}**")
-    st.write(f"Model: **ibm/granite-3-2b-instruct**")
+    st.write(f"Model: **{_model_id}**")
     if not api_key_present or not proj_present:
         st.info("Using deterministic mock that still returns valid evidence-based JSON with RAG citations. Set env vars to call real watsonx.")
     else:
@@ -1269,9 +1270,9 @@ with tab_watsonx:
     st.subheader("🔌 IBM watsonx.ai Integration — Code & Status")
     st.markdown(f"""
     **SDK Available:** `{WATSONX_AVAILABLE}`  
-    **Model ID:** `ibm/granite-3-2b-instruct` (Granite)  
+    **Model ID:** `{os.getenv('WATSONX_MODEL_ID', GRANITE_DEFAULT_MODEL)}` (Granite, override with WATSONX_MODEL_ID)  
     **Credentials:** API Key present={api_key_present}, Project ID present={proj_present}  
-    **Mode:** {"REAL watsonx call" if api_key_present and proj_present and WATSONX_AVAILABLE else "MOCK fallback (deterministic, evidence-based, always valid JSON)"}  
+    **Mode:** {"REAL_READY - real watsonx call attempted" if api_key_present and proj_present and WATSONX_AVAILABLE else "MOCK - deterministic, evidence-based, always valid JSON"}  
 
     **Why mock?** Ensures demo works offline for judges without IBM Cloud account, while code is production-ready for real call.
     """)
@@ -1282,7 +1283,7 @@ from ibm_watsonx_ai.foundation_models import ModelInference
 
 creds = Credentials(api_key=os.getenv("WATSONX_APIKEY"), url="https://us-south.ml.cloud.ibm.com")
 model = ModelInference(
-    model_id="ibm/granite-3-2b-instruct",
+    model_id=os.getenv("WATSONX_MODEL_ID", "ibm/granite-4-h-small"),
     credentials=creds,
     project_id=os.getenv("WATSONX_PROJECT_ID"),
     params={"decoding_method":"greedy", "max_new_tokens":500, "temperature":0.2}

@@ -71,7 +71,7 @@ One-line env var switch, code already ready (see `README.md` and `.env.example` 
 ```python
 # In granite_client.py _call_watsonx_granite()
 creds = Credentials(api_key=os.getenv("WATSONX_APIKEY"), url="https://us-south.ml.cloud.ibm.com")
-model = ModelInference(model_id="ibm/granite-3-2b-instruct", credentials=creds, project_id=...)
+model = ModelInference(model_id=os.getenv("WATSONX_MODEL_ID", "ibm/granite-4-h-small"), credentials=creds, project_id=...)
 response = model.generate_text(prompt=full_prompt)
 ```
 
