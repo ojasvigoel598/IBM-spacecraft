@@ -61,10 +61,22 @@ SCENARIO_LABELS = {
 }
 
 # ---- auth ------------------------------------------------------------------
-from missionmind.auth.api import router as auth_router  # noqa: E402
+from missionmind.auth.api import (  # noqa: E402
+    router as auth_router, check_production_config,
+)
 from missionmind.auth.deps import require_admin, require_verified  # noqa: E402
 from missionmind.auth.ratelimit import check_rate, ip_key  # noqa: E402
 from missionmind.auth import service as auth_service  # noqa: E402
+from missionmind.auth import notify as auth_notify  # noqa: E402
+
+# production must be configured correctly or the app refuses to start
+check_production_config()
+
+
+def auth_service_db_path() -> str:
+    """Auth database path (the health endpoint exposes only its basename)."""
+    from missionmind.auth import db as auth_db
+    return auth_db.db_path()
 
 
 def _allowed_origins() -> List[str]:
@@ -253,6 +265,13 @@ def health(request: Request):
         "watsonx_key": g["api_key_present"],
         # full, honest state — never contains the key itself
         "granite": g,
+        # auth readiness state (basename only — never the full DB path)
+        "auth": {
+            "mode": "production" if os.getenv("MISSIONMIND_ENV", "").strip().lower() == "production" else "dev",
+            "db": os.path.basename(auth_service_db_path()),
+            "smtp_configured": auth_notify.smtp_configured(),
+            "delivery": "email" if auth_notify.smtp_configured() else "dev-echo",
+        },
     }
 
 

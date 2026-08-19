@@ -18,6 +18,7 @@ Design notes:
 import os
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
 
 from missionmind.viz.api_server import app
@@ -492,6 +493,114 @@ def test_concurrent_request_hammering_is_bounded(authed_client):
     assert 429 in statuses, "expected rate-limit 429s under load"
     assert 500 not in statuses, "no 500s allowed under load"
     _os.environ.pop("MISSIONMIND_API_LIMIT", None)
+
+
+# ---- production config guard + email delivery -----------------------------
+
+def test_check_production_config_requires_db_path_and_smtp(monkeypatch):
+    from missionmind.auth.api import check_production_config
+    from missionmind.auth import notify
+
+    monkeypatch.setenv("MISSIONMIND_ENV", "production")
+    # dev mode (env unset) passes regardless
+    monkeypatch.delenv("MISSIONMIND_ENV")
+    check_production_config()  # no raise
+
+    monkeypatch.setenv("MISSIONMIND_ENV", "production")
+    monkeypatch.delenv("MISSIONMIND_DB_PATH", raising=False)
+    with pytest.raises(RuntimeError):
+        check_production_config()
+
+    # DB path present but no SMTP relay -> still refuses to start
+    os.environ["MISSIONMIND_DB_PATH"] = "C:\\tmp\\persistent\\auth.db"
+    monkeypatch.delenv("MISSIONMIND_SMTP_HOST", raising=False)
+    with pytest.raises(RuntimeError):
+        check_production_config()
+
+    # fully configured -> passes
+    monkeypatch.setenv("MISSIONMIND_SMTP_HOST", "relay.example.com")
+    check_production_config()
+
+
+def test_production_never_returns_tokens_and_sends_email(monkeypatch):
+    """In production the signup/reset responses must NOT contain the token or
+    a dev link — the token goes out via the SMTP relay instead."""
+    from missionmind.auth import notify
+    sent = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=None):
+            self.host, self.port = host, port
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def ehlo(self):
+            pass
+
+        def starttls(self):
+            pass
+
+        def login(self, u, p):
+            pass
+
+        def send_message(self, msg):
+            sent.append((self.host, str(msg)))
+
+    monkeypatch.setattr(notify.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setenv("MISSIONMIND_ENV", "production")
+    monkeypatch.setenv("MISSIONMIND_SMTP_HOST", "relay.example.com")
+    monkeypatch.setenv("MISSIONMIND_PUBLIC_URL", "https://missionmind.example")
+    monkeypatch.setenv("MISSIONMIND_SMTP_FROM", "noreply@missionmind.example")
+
+    c = _new_client()
+    email = _unique_email("prod")
+    r = c.post("/api/auth/signup", json={"email": email, "password": PASSWORD})
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert "verification_token" not in body, "token leaked in production"
+    assert "dev_verification_link" not in body, "dev link leaked in production"
+    assert "verification_required" in body
+    # the token was emailed, not echoed (the console link uses ?vt=)
+    assert sent, "SMTP delivery was not attempted in production"
+    host, raw_msg = sent[0]
+    assert host == "relay.example.com"
+    assert "missionmind.example/?vt=" in raw_msg
+    assert email in raw_msg
+
+
+def test_smtp_not_configured_production_does_not_echo_token(monkeypatch):
+    """Even without a relay, production must never echo the token — the
+    failure is logged server-side, the client still gets the generic reply."""
+    from missionmind.auth import notify
+    monkeypatch.setattr(notify, "send_secret", lambda *a, **k: False)
+    monkeypatch.setenv("MISSIONMIND_ENV", "production")
+    monkeypatch.delenv("MISSIONMIND_SMTP_HOST", raising=False)
+
+    c = _new_client()
+    r = c.post("/api/auth/signup",
+               json={"email": _unique_email("nosmtp"), "password": PASSWORD})
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert "verification_token" not in body
+    assert "dev_verification_link" not in body
+    assert "account created" in body["message"]
+
+
+def test_health_reports_auth_readiness_without_secrets(api_client):
+    """/api/health must describe auth mode/delivery with the DB basename only
+    (never the full path) and no credentials."""
+    r = api_client.get("/api/health")
+    assert r.status_code == 200
+    auth = r.json().get("auth", {})
+    assert auth.get("mode") in ("dev", "production")
+    assert auth.get("db") == "test.db"  # conftest's throwaway DB basename
+    assert "missionmind" not in (auth.get("db") or "")  # not the default path
+    assert "smtp_configured" in auth
+    assert "MISSIONMIND" not in r.text.upper() or "DB_PATH" not in r.text.upper()
 
 
 # ---- extra: enumeration safety + session/cookie hygiene --------------------
