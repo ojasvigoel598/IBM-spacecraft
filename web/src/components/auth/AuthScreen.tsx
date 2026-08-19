@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Satellite } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -51,6 +51,23 @@ export default function AuthScreen() {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Email links arrive as ?vt= (verify) / ?rt= (reset) on the console root.
+  // Prefill the corresponding step so the one-time token only needs a click.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const vt = params.get('vt')
+    const rt = params.get('rt')
+    if (vt) {
+      setToken(vt)
+      setStep('verify')
+      setNotice('Enter the one-time verification token sent to your inbox.')
+    } else if (rt) {
+      setResetToken(rt)
+      setStep('reset2')
+      setNotice('Enter a new password — the one-time reset token is already filled in.')
+    }
+  }, [])
 
   const showError = (e: unknown, fallback: string) => {
     setError(e instanceof ApiError ? e.message : fallback)
