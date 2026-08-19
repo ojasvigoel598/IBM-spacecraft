@@ -46,6 +46,24 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 _MAX_BODY = 16 * 1024  # 16 KB — auth payloads are tiny
 
 
+# Auth rate limits. Env-overridable so deployments can tune them and so the
+# test suite can raise the signup cap (the suite creates many fixture users
+# from one test IP) without weakening the login/verify/reset enforcement the
+# security tests exercise.
+def _limit(env: str, default: int) -> int:
+    v = os.getenv(env, "")
+    return int(v) if v.isdigit() else default
+
+
+LIMIT_SIGNUP = _limit("MISSIONMIND_AUTH_SIGNUP_LIMIT", 5)          # / 15 min / IP
+LIMIT_LOGIN = _limit("MISSIONMIND_AUTH_LOGIN_LIMIT", 10)           # / 5 min / (IP,email)
+LIMIT_LOGIN_IP = _limit("MISSIONMIND_AUTH_LOGIN_IP_LIMIT", 30)     # / 5 min / IP
+LIMIT_VERIFY = _limit("MISSIONMIND_AUTH_VERIFY_LIMIT", 10)         # / 10 min / IP
+LIMIT_RESEND = _limit("MISSIONMIND_AUTH_RESEND_LIMIT", 3)          # / 15 min / (IP,email)
+LIMIT_RESET = _limit("MISSIONMIND_AUTH_RESET_LIMIT", 5)            # / 15 min / (IP,email)
+LIMIT_RESET_CONFIRM = _limit("MISSIONMIND_AUTH_RESET_CONFIRM_LIMIT", 10)  # / 10 min / IP
+
+
 def _is_production() -> bool:
     return os.getenv("MISSIONMIND_ENV", "").strip().lower() == "production" \
         or os.getenv("MISSIONMIND_SECURE_COOKIES", "").strip() == "1"
@@ -144,7 +162,7 @@ class ResetConfirmIn(_Strict):
 
 @router.post("/signup", status_code=201)
 def signup(body: SignupIn, request: Request, response: Response):
-    _rate(request, "signup", 5, 900)  # 5 / 15 min per IP
+    _rate(request, "signup", LIMIT_SIGNUP, 900)  # per IP
     try:
         result = service.create_user(body.email, body.password)
     except service.EmailTakenError:
@@ -170,7 +188,7 @@ def signup(body: SignupIn, request: Request, response: Response):
 
 @router.post("/verify")
 def verify(body: TokenIn, request: Request, response: Response):
-    _rate(request, "verify", 10, 600)
+    _rate(request, "verify", LIMIT_VERIFY, 600)
     try:
         user = service.verify_email(body.token)
     except service.VerificationError:
@@ -181,7 +199,7 @@ def verify(body: TokenIn, request: Request, response: Response):
 
 @router.post("/resend")
 def resend(body: EmailIn, request: Request, response: Response):
-    _rate(request, "resend", 3, 900, extra=body.email.strip().lower())
+    _rate(request, "resend", LIMIT_RESEND, 900, extra=body.email.strip().lower())
     token = service.resend_verification(body.email)
     if token is None:
         # generic — same response whether or not the account exists
@@ -198,9 +216,14 @@ def resend(body: EmailIn, request: Request, response: Response):
 
 @router.post("/login")
 def login(body: LoginIn, request: Request, response: Response):
-    _rate(request, "login", 10, 300, extra=body.email.strip().lower())
-    _rate(request, "login_ip", 30, 300)  # per-IP spray cap
-    user = service.get_user_by_email(body.email)
+    _rate(request, "login", LIMIT_LOGIN, 300, extra=body.email.strip().lower())
+    _rate(request, "login_ip", LIMIT_LOGIN_IP, 300)  # per-IP spray cap
+    try:
+        user = service.get_user_by_email(body.email)
+    except service.AuthError:
+        # malformed email -> same generic 401 as a wrong password (no 500,
+        # no format-rules leak)
+        raise HTTPException(status_code=401, detail="invalid email or password")
     if user is None:
         raise HTTPException(status_code=401, detail="invalid email or password")
     from missionmind.auth import db
@@ -231,7 +254,7 @@ def me(user: dict = Depends(get_current_user)):
 
 @router.post("/reset")
 def reset(body: EmailIn, request: Request, response: Response):
-    _rate(request, "reset", 5, 900, extra=body.email.strip().lower())
+    _rate(request, "reset", LIMIT_RESET, 900, extra=body.email.strip().lower())
     token = service.request_password_reset(body.email)
     if token is None:
         return {"message": "if that email is registered, a reset link was sent"}
@@ -245,7 +268,7 @@ def reset(body: EmailIn, request: Request, response: Response):
 
 @router.post("/reset/confirm")
 def reset_confirm(body: ResetConfirmIn, request: Request, response: Response):
-    _rate(request, "reset_confirm", 10, 600)
+    _rate(request, "reset_confirm", LIMIT_RESET_CONFIRM, 600)
     try:
         user = service.reset_password(body.token, body.password)
     except service.ResetError as e:
