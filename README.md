@@ -83,8 +83,12 @@ cp .env.example .env                                   # then fill in WATSONX_AP
 python -m missionmind.ai.granite_client --check        # makes ONE real call; "CHECK PASS" only if IBM actually answers (never the mock)
 
 # web mission-control console (React + shadcn/ui + Tailwind)
-python -m uvicorn missionmind.viz.api_server:app --port 8100   # JSON API on the same pipeline
+python -m uvicorn missionmind.viz.api_server:app --port 8100   # JSON API on the same pipeline (real auth)
 cd web && npm install && npm run dev -- --port 5173            # console at http://localhost:5173
+# The console now requires an account: Sign up -> verify (dev mode shows the
+# one-time token; no SMTP needed) -> Log in. Verification/reset tokens are
+# returned in responses ONLY outside production (MISSIONMIND_ENV=production
+# never returns them).
 
 # 6. install the git pre-commit hook (blocks wrong author, secrets, or runtime files)
 bash scripts/install-hooks.sh
@@ -105,6 +109,10 @@ Open `http://localhost:8501`. The 3D spacecraft CAD loads inside the dashboard; 
 | `WATSONX_APIKEY`, `WATSONX_PROJECT_ID` | Real `ibm/granite-4-h-small` call instead of the deterministic mock fallback. |
 | `WATSONX_MODEL_ID` | Defaults to `ibm/granite-4-h-small`; any model ID on watsonx.ai works. |
 | `MISSIONMIND_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to call the FastAPI backend (CORS). Unset = local dev origins only (Streamlit `:8501`, Vite `:5173`, API `:8100`). Set this to your Vercel URL when deployed — wildcard CORS is never used. |
+| `MISSIONMIND_ENV=production` | Secure cookies + HSTS + verification/reset tokens never returned to the client. Unset (dev) returns tokens so the demo works without SMTP. |
+| `MISSIONMIND_DB_PATH` | SQLite file for users/sessions/tokens (default `missionmind/data/missionmind.db`, gitignored). |
+| `MISSIONMIND_ADMIN_EMAIL`, `MISSIONMIND_ADMIN_PASSWORD` | Bootstrap admin account (created email-verified at startup). |
+| `MISSIONMIND_AUTH_*`, `MISSIONMIND_API_*` | Rate-limit tuning (see `.env.example` for every knob and default). |
 
 ---
 
@@ -132,20 +140,39 @@ Community Cloud.
 
 ### Security
 
-- **CORS is origin-restricted, not wildcard.** The FastAPI backend
-  (`missionmind/viz/api_server.py`) allows only local dev origins by default
-  and a configured list via `MISSIONMIND_ALLOWED_ORIGINS`; it advertises only
-  `GET`/`OPTIONS` (the API is read-only). Set the env var to your Vercel URL
-  when deployed.
+Full details: [`missionmind/docs/SECURITY.md`](missionmind/docs/SECURITY.md).
+
+- **Real multi-user authentication** on the FastAPI backend (`missionmind/auth/`):
+  signup → email verification → login → logout, plus password reset. Passwords
+  are PBKDF2-HMAC-SHA256 (310k iterations, per-user salt); sessions are opaque
+  HttpOnly SameSite=Lax cookies (Secure in production) stored as digests;
+  verification/reset tokens are single-use, expiring, and stored as digests.
+  All flows are enumeration-safe, and every auth endpoint is rate-limited
+  (login brute-force and per-IP spraying included).
+- **Server-side authorization.** Every mission endpoint requires a *verified*
+  account (401 anon / 403 unverified); the admin endpoint requires an admin
+  role from the database — never from the request. Live edge-node streams are
+  isolated per user.
+- **CORS is origin-restricted, not wildcard.** Default local-dev origins;
+  configured via `MISSIONMIND_ALLOWED_ORIGINS`; methods limited to
+  GET/POST/OPTIONS.
 - **IBM credentials stay server-side.** `WATSONX_APIKEY` / `WATSONX_PROJECT_ID`
   are read only in `missionmind/ai/granite_client.py` and are never exposed by
   `/api/health` (it returns booleans and the model ID, never the key), never
   shipped to the browser, and never logged. `.env` is gitignored and only the
   empty `.env.example` template is committed.
-- **No stack traces reach users.** FastAPI returns generic 500s; RAG, ML
-  explanation, and decision-layer failures degrade to safe fallbacks.
+- **Request defence.** 16 KB body cap, strict schemas (unknown fields
+  rejected), bounded query parameters, per-user/per-IP rate limits, security
+  headers on every response, and generic error bodies — no stack traces,
+  filesystem paths, or env values reach users; full diagnostics are logged
+  server-side.
 - **Secrets are refused in CI**: the pre-commit hook and the Actions workflow
-  scan for key patterns and fail on any committed secret.
+  scan for key patterns and fail on any committed secret; the security job
+  also runs `npm audit` and `pip-audit` dependency scans.
+- **Security regression suite:** `missionmind/tests/test_auth.py` (31 tests)
+  covers authn/authz boundaries, token replay/expiry, brute-force 429s,
+  injection/traversal rejection, error hygiene, secret non-disclosure, CORS,
+  and a concurrent-flood test — all against the real HTTP surface, no mocks.
 
 ---
 
