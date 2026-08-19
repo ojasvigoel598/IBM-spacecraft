@@ -9,7 +9,7 @@
 [![Three.js](https://img.shields.io/badge/3D-Three.js-black.svg)]()
 [![watsonx.ai](https://img.shields.io/badge/IBM-watsonx.ai-1F70C1.svg)]()
 [![NASA PCoE](https://img.shields.io/badge/validation-NASA%20PCoE%20B0005%2F6%2F7%2F18-orange.svg)]()
-[![tests](https://img.shields.io/badge/tests-24%20suites%20PASS-brightgreen.svg)]()
+[![tests](https://img.shields.io/badge/tests-30%20suites%20PASS-brightgreen.svg)]()
 
 </div>
 
@@ -424,7 +424,7 @@ missionmind/
 |   |-- pinn_*.py           Raissi strict PINN + torch-autograd twin + multi-seed sweep + head-to-head
 |   +-- compare.py          threshold-independent + dependent metrics table
 |
-|-- tests/                  19 TDD suites, all pass
+|-- tests/                  30 TDD suites, all pass
 |   |-- test_drift.py       KS drift test
 |   |-- test_ml_metrics.py  predictive-horizon, fresh-capacity, cycle-level
 |   |-- test_physics.py     SOC plateau, V, T-eq
@@ -445,7 +445,7 @@ web/                        React 19 + Vite + Tailwind v4 + shadcn/ui mission-co
 ## Testing
 
 ```bash
-# 24 regression suites (TDD) - run them all with pytest:
+# 30 regression suites (TDD) - run them all with pytest:
 pytest
 
 # or one at a time, e.g.:
