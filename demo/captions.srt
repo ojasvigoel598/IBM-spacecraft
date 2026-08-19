@@ -80,8 +80,8 @@ RAG evidence, and live trace of which code actually ran.
 13
 00:03:07,440 --> 00:03:17,700
 The parameters are grounded in real NASA battery data, the physics is
-hand verified, and the full test suite passes: eighty one tests across
-nineteen suites.
+hand verified, and the full test suite passes: over one hundred tests
+across thirty suites.
 
 14
 00:03:18,200 --> 00:03:30,480
