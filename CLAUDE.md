@@ -67,3 +67,26 @@ of a task, and never batch unrelated changes into one commit. If
 something is not meant to be committed (runtime state, secrets, large
 generated files), it must be gitignored rather than left as a phantom
 diff.
+
+## Commit identity (HARD RULE)
+
+Never create a commit using an AI agent identity — Codebuff, Claude, a bot,
+GitHub Actions, or any other random author/co-author identity. All commits
+made in this repository MUST use the repository owner's configured Git
+identity: `ojasvigoel598`.
+
+1. **Before every commit**, verify with:
+   - `git config user.name`  -> must be `ojasvigoel598`
+   - `git config user.email` -> must be the owner's configured email
+   If the config does not match, stop and ask the human; never proceed.
+2. **Never change the Git identity automatically** (no `git config` writes,
+   no `--author=` overrides, no env `GIT_AUTHOR_*`/`GIT_COMMITTER_*`).
+3. **No AI-generated author or co-author lines**: never append trailers like
+   `Co-Authored-By: Codebuff ...`, `Generated with ...`, or any bot identity
+   to a commit message.
+4. Never create empty, placeholder, generated, or unrelated commits. Every
+   commit must correspond to an actual intentional change made to the
+   repository, with a message that describes that single change.
+5. If a commit is accidentally created with the wrong identity, do not
+   force-push or rewrite history without explicit human approval — report
+   it and ask.
