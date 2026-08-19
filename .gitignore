@@ -44,6 +44,11 @@ uploads/
 # Runtime session state written by the dashboard on every run (not source)
 missionmind/data/last_session.json
 
+# Auth database (users/sessions/tokens) — local state, never committed
+missionmind/data/missionmind.db
+missionmind/data/missionmind.db-wal
+missionmind/data/missionmind.db-shm
+
 # Demo pipeline intermediates (deleted on success; ignored so a crashed run
 # can't leave phantom diffs behind)
 demo/missionmind_demo_raw.mp4
