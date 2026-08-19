@@ -8,25 +8,22 @@ Covered (vertical slice 1 - the documented /api/alert endpoint):
 2. /api/alert with an unknown mode returns 404.
 3. /api/alert in a nominal window reports active=0 and no severity escalation.
 
-The endpoint is declared in the module docstring ("physics+ML+RAG alert evidence
-at time t") but was not implemented; these tests are the spec for it.
+Security (since the API became authenticated):
+- every protected endpoint requires a verified session (401 anon / 403
+  unverified); the tests below exercise the real signup -> verify -> login
+  flow through the fixture `authed_client`.
 """
 
 import os
-import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-
-from fastapi.testclient import TestClient
-from missionmind.viz.api_server import app
-
-client = TestClient(app)
+from fastapi.testclient import TestClient  # noqa: F401  (documented dependency)
+from missionmind.viz.api_server import app  # noqa: F401  (module import sanity)
 
 
-def test_alert_solar_fault_window_returns_evidence():
+def test_alert_solar_fault_window_returns_evidence(authed_client):
     """At t=900 in the solar scenario the alert must be ACTIVE with
     physics + RAG evidence attached (this is the operator-facing contract)."""
-    r = client.get("/api/alert/solar_degradation?t=900")
+    r = authed_client.get("/api/alert/solar_degradation?t=900")
     assert r.status_code == 200, f"expected 200, got {r.status_code}: {r.text[:200]}"
     body = r.json()
 
@@ -62,25 +59,25 @@ def test_alert_solar_fault_window_returns_evidence():
         assert src["path"].endswith(".md"), f"rag path not a markdown doc: {src['path']}"
 
 
-def test_alert_unknown_mode_returns_404():
+def test_alert_unknown_mode_returns_404(authed_client):
     """Unknown scenario ids must not silently produce an alert."""
-    r = client.get("/api/alert/not_a_scenario?t=900")
+    r = authed_client.get("/api/alert/not_a_scenario?t=900")
     assert r.status_code == 404, f"expected 404, got {r.status_code}"
 
 
-def test_alert_nominal_window_is_inactive():
+def test_alert_nominal_window_is_inactive(authed_client):
     """Early mission (burn-in) / no-fault window must report active=0."""
-    r = client.get("/api/alert/solar_degradation?t=100")
+    r = authed_client.get("/api/alert/solar_degradation?t=100")
     assert r.status_code == 200, r.text[:200]
     body = r.json()
     assert body["active"] == 0, "no fault expected at t=100 in solar scenario"
     assert body["severity"] == "nominal"
 
 
-def test_alert_active_has_operator_narrative():
+def test_alert_active_has_operator_narrative(authed_client):
     """An active alert must carry the 4-line operator narrative
     (WARN / SUBSYSTEM / EVIDENCE / ACTION) from causal_narrative."""
-    r = client.get("/api/alert/solar_degradation?t=900")
+    r = authed_client.get("/api/alert/solar_degradation?t=900")
     assert r.status_code == 200, r.text[:200]
     body = r.json()
     assert body["active"] == 1
@@ -91,13 +88,13 @@ def test_alert_active_has_operator_narrative():
         and "ACTION" in narrative, "narrative must be the 4-line causal block"
 
 
-def test_alert_carries_adaptive_decision_block():
+def test_alert_carries_adaptive_decision_block(authed_client):
     """The alert must include the situation-aware decision-layer verdict:
     a strategy chosen per situation (rule-first for confirmed subsystem
     faults), a fused adaptive score, and human-readable reasoning lines."""
     for mode, expected in (("solar_degradation", "RULE_POWER"),
                            ("radiator_degradation", "RULE_THERMAL")):
-        r = client.get(f"/api/alert/{mode}?t=1500")
+        r = authed_client.get(f"/api/alert/{mode}?t=1500")
         assert r.status_code == 200, r.text[:200]
         dec = (r.json().get("decision") or {})
         assert dec.get("strategy"), f"{mode}: decision missing strategy"
@@ -111,20 +108,20 @@ def test_alert_carries_adaptive_decision_block():
         assert dec["adaptive_flag"] == 1, f"{mode}: fault window should flag"
 
     # nominal early window: decision present but inactive
-    r = client.get("/api/alert/solar_degradation?t=100")
+    r = authed_client.get("/api/alert/solar_degradation?t=100")
     dec = (r.json().get("decision") or {})
     assert dec.get("strategy") in ("BURN_IN_SUPPRESS", "NOMINAL"), dec.get("strategy")
     assert dec.get("adaptive_flag") == 0
 
 
-def test_trace_records_live_execution_and_scoring():
+def test_trace_records_live_execution_and_scoring(authed_client):
     """The runtime trace must capture which code actually executes as
     telemetry flows: edge-node stepping + ML scoring on live/next, and
     physics-rule checks on summary/alert. `since` cursors must advance."""
     # 1) a live batch must leave scoring + edge events in the trace
-    r = client.get("/api/live/next?mode=none&n=30")
+    r = authed_client.get("/api/live/next?mode=none&n=30")
     assert r.status_code == 200, r.text[:200]
-    tr = client.get("/api/trace").json()
+    tr = authed_client.get("/api/trace").json()
     assert "events" in tr and "last_seq" in tr, "trace response missing fields"
     events = tr["events"]
     assert len(events) >= 1, "trace empty after a live batch"
@@ -133,22 +130,22 @@ def test_trace_records_live_execution_and_scoring():
         f"expected ML scoring events in trace, got modules={names}"
 
     # 2) physics-rule checks must appear after a summary call
-    client.get("/api/summary/solar_degradation?t=900")
-    tr2 = client.get("/api/trace").json()
+    authed_client.get("/api/summary/solar_degradation?t=900")
+    tr2 = authed_client.get("/api/trace").json()
     names2 = {e.get("module", "") for e in tr2["events"]}
     assert any("physics" in n for n in names2), \
         f"expected physics-rule events in trace, got {names2}"
 
     # 3) the cursor must advance: events after `since=last_seq` are new
     seq = tr["last_seq"]
-    client.get("/api/live/next?mode=none&n=5")
-    tr3 = client.get(f"/api/trace?since={seq}").json()
+    authed_client.get("/api/live/next?mode=none&n=5")
+    tr3 = authed_client.get(f"/api/trace?since={seq}").json()
     assert tr3["last_seq"] > seq, "trace cursor did not advance"
     assert all(e["seq"] > seq for e in tr3["events"]), \
         "since cursor must only return newer events"
 
 
-def test_live_stream_total_advances_but_retained_is_bounded():
+def test_live_stream_total_advances_but_retained_is_bounded(authed_client):
     """The live stream must never retain every frame forever: `total`
     (frames ever streamed) advances without bound, while `retained`
     (frames kept for scoring) stays capped at the scoring window.
@@ -159,7 +156,7 @@ def test_live_stream_total_advances_but_retained_is_bounded():
     retained_before = None
     # stream well past the retention cap in one mode
     for _ in range(3):
-        r = client.get("/api/live/next?mode=radiator_degradation&n=250")
+        r = authed_client.get("/api/live/next?mode=radiator_degradation&n=250")
         assert r.status_code == 200, r.text[:200]
         body = r.json()
         assert "total" in body, "live response missing total"
@@ -174,25 +171,25 @@ def test_live_stream_total_advances_but_retained_is_bounded():
     assert retained_before < total_before, "retained must not equal total once past the cap"
 
 
-def test_cors_blocks_unknown_origins():
+def test_cors_blocks_unknown_origins(api_client):
     """A browser from an origin outside the allowlist must NOT receive CORS
     headers (so it cannot read the response). Regression for the old
-    allow_origins=["*"] configuration."""
-    r = client.get("/api/health", headers={"Origin": "http://evil.example"})
+    allow_origins=[\"*\"] configuration."""
+    r = api_client.get("/api/health", headers={"Origin": "http://evil.example"})
     assert r.status_code == 200
     assert "access-control-allow-origin" not in r.headers, \
         "unknown origin must not be CORS-allowed"
 
 
-def test_cors_allows_local_dashboard_origin():
+def test_cors_allows_local_dashboard_origin(api_client):
     """The Streamlit dashboard origin (localhost:8501) is in the default
     allowlist and must receive an echoed Access-Control-Allow-Origin."""
-    r = client.get("/api/health", headers={"Origin": "http://localhost:8501"})
+    r = api_client.get("/api/health", headers={"Origin": "http://localhost:8501"})
     assert r.status_code == 200
     assert r.headers.get("access-control-allow-origin") == "http://localhost:8501"
 
 
-def test_cors_allowlist_is_env_configurable():
+def test_cors_allowlist_is_env_configurable(api_client):
     """Deployed origins are configured via MISSIONMIND_ALLOWED_ORIGINS; the
     default must never be the wildcard, and a configured origin must work."""
     import missionmind.viz.api_server as api_mod
@@ -212,11 +209,11 @@ def test_cors_allowlist_is_env_configurable():
             os.environ["MISSIONMIND_ALLOWED_ORIGINS"] = old
 
 
-def test_health_reports_granite_state_without_secrets():
+def test_health_reports_granite_state_without_secrets(api_client):
     """/api/health must expose the Granite state machine (MOCK / REAL_READY /
     REAL_FAILED) with booleans only — never the key value itself — and keep
     the legacy watsonx_key field the web frontend reads."""
-    r = client.get("/api/health")
+    r = api_client.get("/api/health")
     assert r.status_code == 200, r.text[:200]
     body = r.json()
     assert body["watsonx_key"] is True or body["watsonx_key"] is False
@@ -233,43 +230,15 @@ def test_health_reports_granite_state_without_secrets():
             assert val not in r.text, "API key leaked into health response"
 
 
-def test_cors_methods_are_read_only():
-    """The API is GET-only; the CORS middleware must not advertise write
-    methods to browsers."""
-    r = client.options("/api/health", headers={
+def test_cors_methods_are_limited_to_get_post_options(api_client):
+    """Browsers may only GET (telemetry) and POST (auth). Write verbs that
+    the API does not implement (PUT/PATCH/DELETE) must not be advertised."""
+    r = api_client.options("/api/health", headers={
         "Origin": "http://localhost:8501",
         "Access-Control-Request-Method": "POST",
     })
     allowed = r.headers.get("access-control-allow-methods", "")
-    assert "POST" not in allowed, f"POST must not be CORS-advertised: {allowed}"
     assert "GET" in allowed, f"GET must be CORS-advertised: {allowed}"
-
-
-if __name__ == "__main__":
-    tests = [test_alert_solar_fault_window_returns_evidence,
-             test_alert_unknown_mode_returns_404,
-             test_alert_nominal_window_is_inactive,
-             test_alert_active_has_operator_narrative,
-             test_alert_carries_adaptive_decision_block,
-             test_trace_records_live_execution_and_scoring,
-             test_live_stream_total_advances_but_retained_is_bounded,
-             test_cors_blocks_unknown_origins,
-             test_cors_allows_local_dashboard_origin,
-             test_cors_allowlist_is_env_configurable,
-             test_cors_methods_are_read_only,
-             test_health_reports_granite_state_without_secrets]
-    failed = []
-    for t in tests:
-        try:
-            t()
-            print(f"PASS {t.__name__}")
-        except AssertionError as e:
-            failed.append(t.__name__)
-            print(f"FAIL {t.__name__}: {e}")
-        except Exception as e:
-            failed.append(t.__name__)
-            print(f"ERROR {t.__name__}: {type(e).__name__}: {e}")
-    if failed:
-        print(f"\n{len(failed)} FAILED: {failed}")
-        sys.exit(1)
-    print("\nAll API-server tests PASS")
+    assert "POST" in allowed, f"POST (auth) must be CORS-advertised: {allowed}"
+    for verb in ("PUT", "PATCH", "DELETE"):
+        assert verb not in allowed, f"{verb} must not be CORS-advertised: {allowed}"

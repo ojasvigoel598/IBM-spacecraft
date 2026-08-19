@@ -165,13 +165,10 @@ def test_mode_a_strict_requires_success(fake_credentials, monkeypatch):
 
 # ---- production path (API) --------------------------------------------------
 
-def test_alert_api_rag_citations_point_at_real_files():
+def test_alert_api_rag_citations_point_at_real_files(authed_client):
     """The production /api/alert path must return RAG citations whose source
     paths exist on disk - no hallucinated source paths can reach the UI."""
-    from fastapi.testclient import TestClient
-    from missionmind.viz.api_server import app
-    with TestClient(app) as client:
-        r = client.get("/api/alert/solar_degradation?t=900")
+    r = authed_client.get("/api/alert/solar_degradation?t=900")
     assert r.status_code == 200, r.text[:300]
     body = r.json()
     rag = body.get("rag", [])
