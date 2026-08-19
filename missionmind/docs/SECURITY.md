@@ -124,10 +124,15 @@ upgrade path for large deployments (not needed for a hackathon demo).
 ## 7. Production checklist (deployment)
 
 1. `MISSIONMIND_ENV=production` — makes cookies `Secure`, enables HSTS, and
-   stops returning verification/reset tokens.
-2. **Wire email delivery** for verification/reset tokens (the
-   `deliver_secret` hook in `missionmind/auth/api.py`). Until then, set the
-   dev flag only for local demo.
+   stops returning verification/reset tokens. The app **refuses to start** in
+   production unless items 2 and 3 are configured (`check_production_config`
+   in `missionmind/auth/api.py` raises with a clear message).
+2. **Email delivery** — `MISSIONMIND_SMTP_HOST` (+ optional PORT/USERNAME/
+   PASSWORD/FROM/TLS) and `MISSIONMIND_PUBLIC_URL`. Tokens are emailed via
+   the stdlib SMTP relay in `missionmind/auth/notify.py`; links point at the
+   console root with `?vt=` / `?rt=`, which the auth screen prefills. In
+   production the token is **never** returned to the client, even if
+   delivery fails (the failure is logged server-side).
 3. `MISSIONMIND_DB_PATH` → a **persistent** path. On Vercel serverless, the
    filesystem is ephemeral/read-only per invocation — the auth database must
    live on a persistent service (e.g. Neon/PlanetScale/Supabase or a small
@@ -141,6 +146,8 @@ upgrade path for large deployments (not needed for a hackathon demo).
 7. Run the security suite before each release:
    `python -m pytest missionmind/tests/test_auth.py -q` and the dependency
    audits (`pip-audit -r requirements.txt`, `npm audit --omit=dev`).
+8. `/api/health` reports auth readiness (`auth.mode`, `auth.db` basename,
+   `auth.smtp_configured`, `auth.delivery`) — no secrets, no full paths.
 
 ## 8. Testing
 
@@ -163,8 +170,8 @@ Run: `python -m pytest missionmind/tests/test_auth.py -q`
 ## 9. Honest limitations
 
 - In-memory rate limiting is per-process (see §4).
-- No SMTP out of the box; email delivery must be wired for production
-  verification/reset (dev mode returns tokens instead — never in production).
+- Email delivery requires an SMTP relay (stdlib client, `missionmind/auth/
+  notify.py`); dev mode returns tokens instead — never in production.
 - SQLite is single-writer; fine for a demo/team scale, not a
   high-concurrency SaaS (move to a hosted DB per §7.3).
 - The Streamlit dashboard (`missionmind/viz/app.py`) runs its own in-process
