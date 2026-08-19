@@ -383,6 +383,8 @@ Not implemented:
 
 - **Live ingest is real but virtual**: a simulated ESP32-class edge node publishes the same physics over a real JSON-lines TCP socket (MQTT when paho-mqtt is installed); the ensemble scores the stream as it arrives. A physical ESP32/RPi can replace the virtual node with the same wire format (`missionmind/telemetry/`).
 - **The strict PINN does not beat the feature-only PGNN**; this is documented as a result, not hidden.
+- **IBM Bob**: account not yet created; genuine usage examples will be documented after account creation.
+- **LangChain/LangFlow/Vector DB**: intentionally not used; TF-IDF is sufficient for 31 chunks (see Technology Stack Decisions above).
 
 ---
 
@@ -506,6 +508,44 @@ Fresh-checkout behaviour:
 | Verify a key | `python -m missionmind.ai.granite_client --check` reports config, then makes ONE real call — it can only report CHECK PASS if IBM actually answered (strict mode never substitutes the mock) |
 | RAG corpus | `missionmind/ai/knowledge_base/{power_subsystem, thermal_subsystem, mission_rules, telemetry_reference}.md` (the telemetry dictionary grounds every variable before reasoning) |
 | Citations | Granite is asked to fill a `citations[]` array linking each claim to a TF-IDF chunk, so each dashboard claim is traceable to a file |
+
+---
+
+## Technology Stack Decisions
+
+This project intentionally uses a **minimal technology stack** that provides the strongest measurable engineering capability. Full analysis: [`missionmind/docs/TECHNOLOGY_STACK_REVIEW.md`](missionmind/docs/TECHNOLOGY_STACK_REVIEW.md).
+
+| Technology | Decision | Reason |
+|---|---|---|
+| TF-IDF RAG | **KEEP** | 31 chunks from 4 files; Recall@k=0.944, MRR=0.935; no vector DB needed |
+| LangChain | **DO NOT IMPLEMENT** | Adds ~50MB for zero retrieval improvement on this corpus |
+| LangFlow | **DO NOT IMPLEMENT** | No complex orchestration needed; pipeline is transparent in Python |
+| Vector databases | **DO NOT IMPLEMENT** | 31 chunks fit in memory; no infrastructure needed |
+| Dense embeddings | **OPTIONAL FUTURE WORK** | Benchmark when KB grows beyond ~100 chunks |
+| IBM watsonx/Granite | **IMPLEMENTED** | Real SDK, honest mock fallback, ready for credentials |
+
+---
+
+## IBM Bob Status
+
+**⚠️ PENDING — Account not yet created.**
+
+IBM Bob is the required development tool for the August AI Builders Challenge. The user has not yet created an IBM Bob account or configured watsonx/Granite credentials.
+
+**What exists:**
+- Real `ibm-watsonx-ai` SDK integration (code-ready)
+- Environment variables configured (`WATSONX_APIKEY`, `WATSONX_PROJECT_ID`)
+- Strict smoke-test mode (`python -m missionmind.ai.granite_client --check`)
+- Honest mock fallback when no credentials are present
+
+**What must be done after account creation:**
+1. Create IBM Cloud account → enable watsonx.ai
+2. Create a watsonx project → get project ID
+3. Generate an API key → add to `.env`
+4. Run `python -m missionmind.ai.granite_client --check` to verify
+5. Document genuine Bob usage examples in this README
+
+**Do not fabricate Bob usage evidence.** Once the user actually uses Bob, genuine examples will be documented here.
 
 ---
 
