@@ -1,35 +1,57 @@
 """MissionMind web API — serves the SAME pipeline as the Streamlit dashboard.
 
-Endpoints:
-  GET /api/health                     -> {status, models, watsonx}
-  GET /api/scenarios                  -> {scenarios: [names]}
-  GET /api/scenario/{mode}            -> full scored telemetry for a scenario
-  GET /api/live/next?mode=&n=30       -> next N frames from the edge node +
-                                         live ensemble score for the latest window
-  GET /api/summary/{mode}?t=          -> condensed snapshot at mission time t
-  GET /api/alert/{mode}?t=            -> physics+ML+RAG alert evidence at time t
+Public endpoints:
+  GET /api/health                    -> {status, models, watsonx}
+  GET /api/scenarios                 -> {scenarios: [names]}
+  POST /api/auth/*                   -> signup / verify / login / logout / reset
 
-The virtual edge node state is session-free (single global node per mode), so
-the live endpoints genuinely advance a stream — each call produces NEW frames.
+Authenticated endpoints (verified user required — server-side only):
+  GET /api/scenario/{mode}           -> full scored telemetry for a scenario
+  GET /api/live/next?mode=&n=30      -> next N frames from the edge node +
+                                       live ensemble score for the latest window
+  GET /api/summary/{mode}?t=         -> condensed snapshot at mission time t
+  GET /api/alert/{mode}?t=           -> physics+ML+RAG alert evidence at time t
+  GET /api/models                    -> model zoo self-test
+  GET /api/trace                     -> runtime execution trace
+
+Admin only:
+  GET /api/admin/status              -> non-sensitive usage stats
+
+Security model (see missionmind/docs/SECURITY.md):
+  - authentication via opaque session cookies (HttpOnly, SameSite=Lax,
+    Secure in production), stored as digests in SQLite
+  - authorization decided server-side from the session, never from the client
+  - rate limiting per IP (auth) and per user (mission endpoints)
+  - request bodies schema-validated and size-capped
+  - no stack traces / internal paths ever reach the client
+  - CORS allowlist is strict (never wildcard); the web frontend is same-origin
+    through the Vite proxy / Vercel rewrite
+
+The live edge-node state is per-user (each account advances its own stream),
+so one user cannot disturb another user's live telemetry.
 
 Run:  .venv/Scripts/python.exe -m uvicorn missionmind.viz.api_server:app --port 8100
 """
 from __future__ import annotations
 
+import logging
 import os
 import sys
-import json
 from typing import Dict, List, Optional
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from missionmind.ml.detect import score_dataframe
 from missionmind.simulator.run_scenarios import run_scenario
 from missionmind.physics_rules.rules import check_power_subsystem, check_thermal_subsystem, slope
+
+log = logging.getLogger("missionmind.api")
 
 SCENARIOS = ["none", "solar_degradation", "radiator_degradation"]
 SCENARIO_LABELS = {
@@ -37,6 +59,13 @@ SCENARIO_LABELS = {
     "solar_degradation": "Solar Array Degradation",
     "radiator_degradation": "Radiator Degradation",
 }
+
+# ---- auth ------------------------------------------------------------------
+from missionmind.auth.api import router as auth_router  # noqa: E402
+from missionmind.auth.deps import require_admin, require_verified  # noqa: E402
+from missionmind.auth.ratelimit import check_rate, ip_key  # noqa: E402
+from missionmind.auth import service as auth_service  # noqa: E402
+
 
 def _allowed_origins() -> List[str]:
     """Origins allowed to call this API from a browser.
@@ -59,15 +88,98 @@ def _allowed_origins() -> List[str]:
     ]
 
 
-app = FastAPI(title="MissionMind API", version="2.0")
+app = FastAPI(title="MissionMind API", version="3.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins(),
-    # The API surface is read-only (GET / OPTIONS only); browsers must not
-    # be able to POST/PUT/DELETE cross-origin even if an origin is allowed.
-    allow_methods=["GET", "OPTIONS"],
+    # GET for telemetry + POST for /api/auth/* (same-origin frontend in prod,
+    # so CORS is only a browser-facing guard — the API itself enforces auth
+    # and never relies on CORS as a security boundary).
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
+
+# ---- security middleware / error handling ----------------------------------
+
+_IS_PRODUCTION = os.getenv("MISSIONMIND_ENV", "").strip().lower() == "production"
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    # the API serves JSON, never HTML; the CSP forbids any inline content
+    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+    # telemetry/alerts are mission-state data: never cache authenticated responses
+    response.headers["Cache-Control"] = "no-store"
+    if _IS_PRODUCTION:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
+@app.middleware("http")
+async def _body_size_limit(request: Request, call_next):
+    if request.method in ("POST", "PUT", "PATCH"):
+        length = request.headers.get("content-length")
+        if length is not None:
+            try:
+                if int(length) > 16 * 1024:
+                    return JSONResponse(status_code=413,
+                                        content={"detail": "request body too large"})
+            except ValueError:
+                return JSONResponse(status_code=400,
+                                    content={"detail": "invalid content-length"})
+    return await call_next(request)
+
+
+@app.exception_handler(HTTPException)
+async def _http_exception(request: Request, exc: HTTPException):
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail},
+                        headers=exc.headers)
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_exception(request: Request, exc: RequestValidationError):
+    # never echo the raw validation internals / values to a client
+    return JSONResponse(status_code=422,
+                        content={"detail": "invalid request parameters"})
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception(request: Request, exc: Exception):
+    log.exception("unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500,
+                        content={"detail": "Something went wrong. Please try again."})
+
+
+# ---- rate limiting helpers -------------------------------------------------
+
+def _rate_api(request: Request, user: dict, expensive: bool = False):
+    """Per-user cap on mission endpoints (protects the expensive ML/simulation
+    work from abuse). Public endpoints are capped per IP instead."""
+    if user:
+        scope = "api:expensive" if expensive else "api"
+        key = f"{scope}:{user['id']}"
+        ok, retry = check_rate(key, 60 if expensive else 240, 60)
+    else:
+        key = f"api:anon:{ip_key(request)}"
+        ok, retry = check_rate(key, 120, 60)
+    if not ok:
+        raise HTTPException(status_code=429, detail="too many requests, try again later",
+                            headers={"Retry-After": str(max(1, int(retry)))})
+
+
+def _public_rate(request: Request):
+    ok, retry = check_rate(f"api:public:{ip_key(request)}", 120, 60)
+    if not ok:
+        raise HTTPException(status_code=429, detail="too many requests, try again later",
+                            headers={"Retry-After": str(max(1, int(retry)))})
+
 
 # ---- cached scored scenarios (deterministic solve + ensemble) --------------
 _scored_cache: Dict[str, object] = {}
@@ -88,21 +200,22 @@ def _scored(mode: str):
     return _scored_cache[mode]
 
 
-# ---- live edge node state --------------------------------------------------
+# ---- live edge node state (per user) --------------------------------------
 from missionmind.telemetry.edge_node import VirtualEdgeNode  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-_nodes: Dict[str, VirtualEdgeNode] = {}
-_buffers: Dict[str, list] = {}  # accumulated frames per mode for live scoring
+_nodes: Dict[tuple, VirtualEdgeNode] = {}
+_buffers: Dict[tuple, list] = {}  # accumulated frames per (user, mode)
 
 
-def _node(mode: str) -> VirtualEdgeNode:
-    if mode not in _nodes:
-        _nodes[mode] = VirtualEdgeNode(failure_mode=mode, noise=True,
-                                       adc_bits=12, drop_rate=0.02)
-        _buffers[mode] = []
-    return _nodes[mode]
+def _node(user_id: int, mode: str) -> VirtualEdgeNode:
+    key = (user_id, mode)
+    if key not in _nodes:
+        _nodes[key] = VirtualEdgeNode(failure_mode=mode, noise=True,
+                                      adc_bits=12, drop_rate=0.02)
+        _buffers[key] = []
+    return _nodes[key]
 
 
 class FrameOut(BaseModel):
@@ -115,11 +228,14 @@ class FrameOut(BaseModel):
     heat_out_w: float
 
 
+# ---- public endpoints ------------------------------------------------------
+
 @app.get("/api/health")
-def health():
+def health(request: Request):
     """Runtime health: model artifacts + a clear Granite state machine so a
     judge can distinguish MOCK / REAL_READY / REAL_FAILED without any
     credential being exposed (api_key_present is a boolean only)."""
+    _public_rate(request)
     from missionmind.ai.granite_client import granite_status
     g = granite_status()
     return {
@@ -135,16 +251,44 @@ def health():
 
 
 @app.get("/api/scenarios")
-def scenarios():
+def scenarios(request: Request):
+    _public_rate(request)
     return {"scenarios": SCENARIOS, "labels": SCENARIO_LABELS}
 
 
+@app.get("/api/admin/status")
+def admin_status(request: Request, user: dict = Depends(require_admin)):
+    """Non-sensitive admin stats (no emails, no tokens, no secrets)."""
+    from missionmind.auth import db as auth_db
+    conn = auth_db.get_conn()
+    users = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    verified = conn.execute(
+        "SELECT COUNT(*) FROM users WHERE email_verified=1").fetchone()[0]
+    admins = conn.execute(
+        "SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0]
+    sessions = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+    from missionmind.auth.ratelimit import _limiter
+    return {
+        "users": users,
+        "verified_users": verified,
+        "admins": admins,
+        "active_sessions": sessions,
+        "rate_limit_keys": len(_limiter._hits),
+        "db": os.path.basename(auth_db.db_path()),
+    }
+
+
+# ---- authenticated endpoints ------------------------------------------------
+
 @app.get("/api/scenario/{mode}")
-def scenario(mode: str, t0: int = 0, t1: Optional[int] = None):
+def scenario(mode: str, request: Request, t0: int = 0, t1: Optional[int] = None,
+             user: dict = Depends(require_verified)):
+    _rate_api(request, user)
     if mode not in SCENARIOS:
         raise HTTPException(404, f"unknown scenario {mode}")
     df = _scored(mode)
-    t1 = int(df["time_s"].iloc[-1]) if t1 is None else int(t1)
+    t1 = int(df["time_s"].iloc[-1]) if t1 is None else int(min(max(t1, 0), int(df["time_s"].iloc[-1])))
+    t0 = int(min(max(t0, 0), int(df["time_s"].iloc[-1])))
     sl = df[(df["time_s"] >= t0) & (df["time_s"] <= t1)]
     return {
         "mode": mode,
@@ -268,11 +412,13 @@ def _evidence(mode: str, win) -> dict:
 
 
 @app.get("/api/summary/{mode}")
-def summary(mode: str, t: int = 900):
+def summary(mode: str, request: Request, t: int = 900,
+            user: dict = Depends(require_verified)):
+    _rate_api(request, user)
     if mode not in SCENARIOS:
         raise HTTPException(404, f"unknown scenario {mode}")
     df = _scored(mode)
-    idx = int(min(t, df["time_s"].iloc[-1]))
+    idx = int(min(max(t, 0), df["time_s"].iloc[-1]))
     row = df[df["time_s"] == idx].iloc[-1]
     win = df[(df["time_s"] >= idx - 120) & (df["time_s"] <= idx)]
     orb = {}
@@ -307,7 +453,8 @@ _zoo_cache: Optional[dict] = None
 
 
 @app.get("/api/alert/{mode}")
-def alert(mode: str, t: int = 900):
+def alert(mode: str, request: Request, t: int = 900,
+          user: dict = Depends(require_verified)):
     """Physics + ML + RAG alert evidence at mission time t.
 
     Contract (operator-facing): mode/label/t, `active` flag with `detected_at`
@@ -315,6 +462,7 @@ def alert(mode: str, t: int = 900):
     RAG source citations (path + score). Declared in the module docstring;
     implemented per tests/test_api_server.py.
     """
+    _rate_api(request, user)
     if mode not in SCENARIOS:
         raise HTTPException(404, f"unknown scenario {mode}")
     df = _scored(mode)
@@ -412,8 +560,9 @@ def alert(mode: str, t: int = 900):
 
 
 @app.get("/api/models")
-def models():
+def models(request: Request, user: dict = Depends(require_verified)):
     """Model zoo self-test results (same evaluation as advanced_models.py)."""
+    _rate_api(request, user, expensive=True)
     global _zoo_cache
     if _zoo_cache is not None:
         return _zoo_cache
@@ -469,30 +618,37 @@ def models():
 
 
 @app.get("/api/trace")
-def trace(since: int = 0, limit: int = 300):
+def trace(request: Request, since: int = 0, limit: int = 300,
+          user: dict = Depends(require_verified)):
     """Runtime execution trace - which pipeline code actually ran.
 
     `since` acts as a cursor: events with seq > since. Used by both the web
     console and the Streamlit app to show live code execution behind the
     telemetry numbers.
     """
+    _rate_api(request, user)
     from missionmind.trace import events_since
-    events, last_seq = events_since(seq=since, limit=max(1, min(limit, 500)))
+    since = int(max(since, 0))
+    limit = int(max(1, min(limit, 500)))
+    events, last_seq = events_since(seq=since, limit=limit)
     return {"events": events, "last_seq": last_seq}
 
 
 @app.get("/api/live/next")
-def live_next(mode: str = "solar_degradation", n: int = 30):
+def live_next(mode: str = "solar_degradation", n: int = 30,
+              user: dict = Depends(require_verified)):
     """Advance the virtual edge-node stream and score the accumulated window
-    through the SAME production ensemble the dashboard uses."""
+    through the SAME production ensemble the dashboard uses. The stream state
+    is per-user: each account advances its own node."""
     if mode not in SCENARIOS:
         raise HTTPException(404, f"unknown scenario {mode}")
-    node = _node(mode)
+    n = int(max(1, min(n, 250)))
+    node = _node(user["id"], mode)
     from missionmind.trace import record
     record("telemetry", "VirtualEdgeNode.step",
            note=f"stream {n} frames (noise+ADC+dropout) mode={mode}")
     frames: List[dict] = []
-    for _ in range(int(n)):
+    for _ in range(n):
         f = node.step()
         if f is not None:
             rec = {
@@ -508,10 +664,10 @@ def live_next(mode: str = "solar_degradation", n: int = 30):
                 "bus_state": getattr(f, "bus_state", "normal"),
             }
             frames.append(rec)
-            _buffers[mode].append(rec)
+            _buffers[(user["id"], mode)].append(rec)
     # score the accumulated window (same code path as the Streamlit dashboard)
     score = flag = source = 0.0
-    buf = _buffers[mode]
+    buf = _buffers[(user["id"], mode)]
     if len(buf) >= 30:
         win = pd.DataFrame(buf[-300:])
         scored = score_dataframe(win)
@@ -538,6 +694,10 @@ def live_next(mode: str = "solar_degradation", n: int = 30):
             "retained": len(buf), "window_scored": len(buf) >= 30,
             "anomaly_score": score, "anomaly_flag": flag,
             "anomaly_source": source}
+
+
+# bootstrap admin from env (no-op when unset)
+auth_service.bootstrap_admin()
 
 
 if __name__ == "__main__":
