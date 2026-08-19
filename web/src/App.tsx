@@ -4,6 +4,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
+import AuthScreen from '@/components/auth/AuthScreen'
+import { useAuth } from '@/auth'
 import {
   Activity,
   AlertTriangle,
@@ -18,6 +20,7 @@ import {
   Pause,
   RefreshCw,
   ChevronRight,
+  LogOut,
 } from 'lucide-react'
 
 // Same-origin by default (/api/*): served by the Vite dev proxy locally and
@@ -153,6 +156,24 @@ function Kpi({
 
 /* ------------------------------ main app -------------------------------- */
 export default function App() {
+  const { status: authStatus } = useAuth()
+  if (authStatus === 'loading') {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
+          connecting to mission control…
+        </div>
+      </div>
+    )
+  }
+  if (authStatus === 'anon') {
+    return <AuthScreen />
+  }
+  return <MissionConsole />
+}
+
+function MissionConsole() {
+  const { user: authUser, logout } = useAuth()
   const [mode, setMode] = useState('solar_degradation')
   const [rows, setRows] = useState<Row[] | null>(null)
   const [summary, setSummary] = useState<Summary | null>(null)
@@ -348,6 +369,17 @@ export default function App() {
             <div className="hidden font-mono text-xs text-muted-foreground sm:block tnum">
               {health?.status === 'ok' ? 'API ONLINE' : 'API …'}
             </div>
+            {authUser && (
+              <div className="flex items-center gap-2">
+                <span className="hidden font-mono text-[10px] text-muted-foreground md:block">
+                  {authUser.email}
+                </span>
+                <Button variant="outline" size="xs" onClick={() => void logout()} title="Log out">
+                  <LogOut className="size-3" />
+                  LOG OUT
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </header>
