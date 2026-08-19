@@ -103,9 +103,6 @@ app.include_router(auth_router)
 
 # ---- security middleware / error handling ----------------------------------
 
-_IS_PRODUCTION = os.getenv("MISSIONMIND_ENV", "").strip().lower() == "production"
-
-
 @app.middleware("http")
 async def _security_headers(request: Request, call_next):
     response = await call_next(request)
@@ -117,7 +114,7 @@ async def _security_headers(request: Request, call_next):
     response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
     # telemetry/alerts are mission-state data: never cache authenticated responses
     response.headers["Cache-Control"] = "no-store"
-    if _IS_PRODUCTION:
+    if os.getenv("MISSIONMIND_ENV", "").strip().lower() == "production":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
@@ -159,13 +156,22 @@ async def _unhandled_exception(request: Request, exc: Exception):
 
 # ---- rate limiting helpers -------------------------------------------------
 
+def _api_limit(name: str, default: int) -> int:
+    """Per-user API request caps, env-configurable (tests lower them to prove
+    enforcement deterministically without hammering the real limits)."""
+    v = os.getenv(name, "")
+    return int(v) if v.isdigit() else default
+
+
 def _rate_api(request: Request, user: dict, expensive: bool = False):
     """Per-user cap on mission endpoints (protects the expensive ML/simulation
     work from abuse). Public endpoints are capped per IP instead."""
     if user:
         scope = "api:expensive" if expensive else "api"
         key = f"{scope}:{user['id']}"
-        ok, retry = check_rate(key, 60 if expensive else 240, 60)
+        limit = _api_limit("MISSIONMIND_API_EXPENSIVE_LIMIT", 60) if expensive \
+            else _api_limit("MISSIONMIND_API_LIMIT", 240)
+        ok, retry = check_rate(key, limit, 60)
     else:
         key = f"api:anon:{ip_key(request)}"
         ok, retry = check_rate(key, 120, 60)
