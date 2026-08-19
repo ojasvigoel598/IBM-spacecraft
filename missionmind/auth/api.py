@@ -97,21 +97,40 @@ def _dev_mode() -> bool:
     return not _is_production()
 
 
+def check_production_config() -> None:
+    """Fail fast at startup when production mode is misconfigured. Called at
+    import time by viz/api_server.py. Production must have a persistent DB
+    path (the default local SQLite file is ephemeral on serverless) and an
+    SMTP relay (tokens must be emailed, never returned to clients)."""
+    if not _is_production():
+        return
+    if not os.getenv("MISSIONMIND_DB_PATH", "").strip():
+        raise RuntimeError(
+            "MISSIONMIND_ENV=production requires MISSIONMIND_DB_PATH to be set "
+            "explicitly (the default missionmind/data/missionmind.db is an "
+            "ephemeral local file and unusable in production/serverless). "
+            "Point it at a persistent database and restart.")
+    from missionmind.auth import notify
+
+    if not notify.smtp_configured():
+        raise RuntimeError(
+            "MISSIONMIND_ENV=production requires MISSIONMIND_SMTP_HOST (and "
+            "MISSIONMIND_PUBLIC_URL) so verification/reset tokens can be "
+            "emailed; production mode never returns tokens to clients.")
+
+
 def _deliver_secret(kind: str, email: str, token: str) -> str | None:
     """Delivery hook. Returns a client-facing link in dev mode (used by the
-    frontend to complete the flow), None in production where a real mailer
-    must be wired (documented in SECURITY.md)."""
+    frontend to complete the flow). In production, sends a real email via the
+    SMTP relay (missionmind.auth.notify) and returns None — the token is
+    never exposed to the client."""
     if _dev_mode():
         if kind == "verify":
             return f"/api/auth/verify?token={token}"
         return f"/api/auth/reset/confirm?token={token}"
-    # production: log a server-side note (never the token), the operator must
-    # wire SMTP per SECURITY.md for real delivery
-    import logging
+    from missionmind.auth import notify
 
-    logging.getLogger("missionmind.auth").info(
-        "delivered %s for %s (email transport not configured)",
-        kind, email)
+    notify.send_secret(kind, email, token)
     return None
 
 
