@@ -419,6 +419,81 @@ def test_admin_bootstrap_via_env_grants_admin_access(monkeypatch):
     assert "secret" not in r.text.lower() or "password" not in r.text.lower()
 
 
+# ---- attack phase: traversal, odd methods, malformed queries, concurrency --
+
+def test_path_traversal_and_encoded_paths_are_rejected(authed_client):
+    """Path traversal / encoded separators must never reach the filesystem."""
+    for path in ("/api/alert/../../etc/passwd",
+                 "/api/alert/..%2f..%2fetc%2fpasswd",
+                 "/api/scenario/..%2F..%2Fetc%2Fpasswd",
+                 "/api/summary/%2e%2e/%2e%2e/etc/passwd",
+                 "/api/alert/..\\..\\windows\\system32",
+                 "/api/alert/%00",
+                 "/api/alert/none/../../admin"):
+        r = authed_client.get(path)
+        assert r.status_code in (404, 422, 405), \
+            f"{path}: got {r.status_code} - must never 200/500"
+        assert "root" not in r.text.lower() or "Traceback" not in r.text
+
+
+def test_malformed_query_parameters_are_rejected_not_crashed(authed_client):
+    """Wrong types / absurd values in query strings -> clean 422/200 clamp,
+    never a 500 or an internal path leak."""
+    for path in ("/api/alert/none?t=abc",
+                 "/api/summary/none?t=-999999999999",
+                 "/api/trace?since=abc",
+                 "/api/trace?limit=999999999999",
+                 "/api/scenario/none?t0=abc&t1=def",
+                 "/api/live/next?n=-50",
+                 "/api/live/next?mode=none%00",
+                 "/api/trace?since=1%3Bcat%20%2Fetc%2Fpasswd"):
+        r = authed_client.get(path)
+        assert r.status_code in (200, 404, 422), \
+            f"{path}: got {r.status_code}: {r.text[:120]}"
+        assert "Traceback" not in r.text and "api_server.py" not in r.text
+
+
+def test_unimplemented_http_methods_return_405(authed_client):
+    for method, path in (("delete", "/api/scenario/none"),
+                         ("put", "/api/summary/none"),
+                         ("patch", "/api/alert/none"),
+                         ("delete", "/api/health")):
+        r = authed_client.request(method, path)
+        assert r.status_code == 405, f"{method.upper()} {path}: got {r.status_code}"
+
+
+def test_concurrent_request_hammering_is_bounded(authed_client):
+    """A concurrent flood must be absorbed by the rate limiter (429s), never
+    crash the process or return 500s."""
+    import threading
+
+    from missionmind.auth.ratelimit import _limiter
+    _limiter.reset()
+    from missionmind.viz import api_server as api_mod
+    api_mod._api_limit  # ensure module loaded
+    import os as _os
+    _os.environ["MISSIONMIND_API_LIMIT"] = "20"
+    errors = []
+    statuses = []
+
+    def _hit():
+        try:
+            r = authed_client.get("/api/scenario/none?t0=0&t1=0")
+            statuses.append(r.status_code)
+        except Exception as e:  # noqa: BLE001
+            errors.append(str(e))
+
+    threads = [threading.Thread(target=_hit) for _ in range(60)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+    assert not errors, f"concurrent flood crashed requests: {errors[:3]}"
+    assert 429 in statuses, "expected rate-limit 429s under load"
+    assert 500 not in statuses, "no 500s allowed under load"
+    _os.environ.pop("MISSIONMIND_API_LIMIT", None)
+
+
 # ---- extra: enumeration safety + session/cookie hygiene --------------------
 
 def test_no_account_enumeration(api_client):
