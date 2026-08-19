@@ -24,6 +24,11 @@ class RateLimiter:
         # key -> list of (timestamp) within the current window
         self._hits: Dict[str, List[float]] = {}
 
+    def reset(self) -> None:
+        """Clear all buckets (tests use this to isolate rate-limit state)."""
+        with self._lock:
+            self._hits.clear()
+
     def allow(self, key: str, limit: int, window_s: float,
               now: Optional[float] = None) -> Tuple[bool, float]:
         """Return (allowed, retry_after_seconds). The caller must reject the
