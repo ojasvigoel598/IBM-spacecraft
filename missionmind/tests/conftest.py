@@ -19,6 +19,7 @@ paths, so the repo's phantom-diff guard stays clean.
 
 import os
 import sys
+import tempfile
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(TESTS_DIR, "..", ".."))
@@ -26,6 +27,84 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 DATA_DIR = os.path.join(ROOT, "missionmind", "data")
+
+# ---- auth test environment -------------------------------------------------
+# Point the auth database at a throwaway file and raise the signup cap (the
+# suite creates many fixture users from one test IP) while keeping the
+# login/verify/reset limits at their real values so the security tests
+# exercise genuine enforcement. Set BEFORE the api_server module is imported.
+TEST_DB_DIR = tempfile.mkdtemp(prefix="missionmind-auth-tests-")
+os.environ.setdefault("MISSIONMIND_DB_PATH",
+                       os.path.join(TEST_DB_DIR, "test.db"))
+os.environ.setdefault("MISSIONMIND_AUTH_SIGNUP_LIMIT", "1000")
+os.environ.setdefault("MISSIONMIND_AUTH_RESEND_LIMIT", "1000")
+# All other auth caps (login per email/IP, verify, reset) stay at their real
+# values: the autouse _reset_rate_limiter fixture below isolates buckets
+# between tests, so each test's counters start from zero and the security
+# tests exercise genuine enforcement deterministically.
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Clear rate-limit buckets after every test so a burst/brute-force test
+    cannot poison later tests (the limiter is process-global)."""
+    yield
+    from missionmind.auth.ratelimit import _limiter
+    _limiter.reset()
+
+
+@pytest.fixture(scope="session")
+def api_client():
+    """A raw TestClient against the real FastAPI app."""
+    from fastapi.testclient import TestClient
+    from missionmind.viz.api_server import app
+
+    with TestClient(app) as client:
+        yield client
+
+
+@pytest.fixture
+def authed_client(api_client):
+    """A TestClient with a fresh verified-user session: sign up -> verify ->
+    log in through the real endpoints (the same path the frontend uses).
+    Function-scoped on purpose: tests that log out or hammer rate limits must
+    not affect the session used by later tests."""
+    import uuid
+
+    email = f"ops-{uuid.uuid4().hex[:12]}@missionmind.test"
+    password = "testpassword1"
+    r = api_client.post("/api/auth/signup",
+                        json={"email": email, "password": password})
+    assert r.status_code == 201, r.text
+    token = r.json()["verification_token"]
+    r = api_client.post("/api/auth/verify", json={"token": token})
+    assert r.status_code == 200, r.text
+    r = api_client.post("/api/auth/login",
+                        json={"email": email, "password": password})
+    assert r.status_code == 200, r.text
+    return api_client
+
+
+@pytest.fixture(scope="session")
+def make_verified_user(api_client):
+    """Factory: create a verified user and return (email, password)."""
+    import uuid
+
+    def _make():
+        email = f"user-{uuid.uuid4().hex[:12]}@missionmind.test"
+        password = "testpassword1"
+        r = api_client.post("/api/auth/signup",
+                            json={"email": email, "password": password})
+        assert r.status_code == 201, r.text
+        r = api_client.post("/api/auth/verify",
+                            json={"token": r.json()["verification_token"]})
+        assert r.status_code == 200, r.text
+        return email, password
+
+    return _make
 
 
 def _generate_scenario_csvs() -> None:
