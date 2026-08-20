@@ -13,13 +13,15 @@
 
 </div>
 
-MissionMind is a satellite mission-operations stack that starts from physics and ends at an operator-facing explanation. A simulator generates one hour of power and thermal telemetry, an ensemble of unsupervised anomaly detectors scores every sample, physics rules act as an independent second opinion, and a Granite-backed RAG layer writes the reasoning in plain language. The same pipeline feeds a Streamlit dashboard with a 3D satellite view and a React console. Validation runs against the real NASA PCoE battery dataset (B0005 / B0006 / B0007 / B0018).
+MissionMind is a satellite mission-operations stack that starts from physics and ends at an operator-facing explanation.
+
+**Selected challenge theme:** *Advance Space Exploration with AI.* MissionMind uses AI to detect spacecraft faults earlier, explain causes with engineering evidence, and recommend corrective actions — giving operators the minutes they need to protect a mission. A simulator generates one hour of power and thermal telemetry, an ensemble of unsupervised anomaly detectors scores every sample, physics rules act as an independent second opinion, and a Granite-backed RAG layer writes the reasoning in plain language. The same pipeline feeds a Streamlit dashboard with a 3D satellite view and a React console. Validation runs against the real NASA PCoE battery dataset (B0005 / B0006 / B0007 / B0018).
 
 ---
 
 ## Demo
 
-**3.5-minute narrated walkthrough** of the whole stack, captured live from the running app: secure multi-user authentication, physics simulation, fault injection, ML detection, RUL, RAG evidence, Granite reasoning, scenario comparison, the 3D digital twin, live ingest, and the web console.
+**2.5-minute narrated walkthrough** of the whole stack, captured live from the running app: secure multi-user authentication, live physics simulation, fault injection, ML detection, RUL, diagnostics, RAG evidence, Granite reasoning, scenario comparison, and the 3D digital twin.
 
 <p align="center">
   <video controls width="860" src="demo/missionmind_demo.mp4"></video>
