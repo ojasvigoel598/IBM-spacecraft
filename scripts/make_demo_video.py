@@ -11,6 +11,7 @@ Pipeline:
      (EBU R128 loudnorm) so the track plays at a consistent level.
 
 Output: demo/missionmind_demo.mp4  (1440x900, H.264, ~30fps) + demo/captions.srt
+         Target duration: ≤ 3 minutes (IBM hackathon limit)
 
 Run:  .venv/Scripts/python.exe scripts/make_demo_video.py
 """
@@ -32,50 +33,41 @@ VOICE = "en-US-ChristopherNeural"  # confident, natural, documentary feel
 FPS = 30
 W, H = 1440, 900
 
-# ---- narration script: one segment per scene, describe only what exists ----
+# ---- narration script: 12 scenes, target ≤ 180 s total ----
 SCENES = [
     ("card_intro", "missionmind-intro",
      "MissionMind. An AI copilot for satellite mission operations. Built for the IBM advance space exploration challenge.",
      "MissionMind — AI Satellite Mission Control"),
     ("card_auth", "auth-flow",
-     "Every operator starts with secure authentication. Sign up, verify your email, log in. Every endpoint is protected server-side: rate limiting, brute force protection, HttpOnly session cookies. No credentials are ever exposed to the browser.",
+     "Every operator starts with secure authentication. Sign up, verify, log in. Every endpoint is protected server-side: rate limited, brute-force protected. No credentials ever reach the browser.",
      "Secure multi-user authentication"),
     ("01_normal", "mission-control",
-     "This is the Mission Control dashboard. Every number on screen comes from a live physics simulation, solved in real time. Solar array output, battery state of charge, bus voltage, and spacecraft temperature. Nominal operation: solar holds five hundred twenty watts, battery full, temperatures stable.",
+     "This is the Mission Control dashboard. Every number comes from a live physics simulation. Solar array output, battery state of charge, bus voltage, and temperature. Solar holds five hundred twenty watts, battery full, temperatures stable.",
      "Live physics simulation"),
     ("02_solar_fault", "fault-injection",
-     "Now we inject a realistic failure: a degrading solar array. The fault ramps in over three hundred seconds, and the telemetry begins to change. Solar power falls toward two hundred fifty watts, net power goes negative, and the battery starts to drain.",
+     "Now we inject a realistic failure: a degrading solar array. The fault ramps in over three hundred seconds. Solar power falls toward two hundred fifty watts, net power goes negative, and the battery starts to drain.",
      "Fault injection: solar array degradation"),
     ("03_solar_fault_onset", "ml-detection",
-     "Watch the detector. The machine learning ensemble flags the anomaly at around thirteen minutes into the mission, well before the fault fully develops. System status flips to critical.",
+     "Watch the detector. The machine learning ensemble flags the anomaly at around thirteen minutes, well before the fault fully develops. System status flips to critical.",
      "ML ensemble detects the anomaly"),
     ("04_solar_deep", "rul-lead",
-     "MissionMind also predicts ahead. The remaining useful life counter is a leading indicator: it starts counting down before the detector confirms, telling the operator the battery has about ninety six minutes of margin.",
+     "MissionMind also predicts ahead. The remaining useful life counter starts counting down before the detector confirms, telling the operator the battery has about ninety six minutes of margin.",
      "RUL: a leading indicator"),
     ("05_ml_diagnostics", "ml-diagnostics",
-     "The ML diagnostics panel shows exactly what the model sees: the anomaly score, the health state, the ensemble verdict, and confidence. Three Isolation Forest models are combined so a single subsystem anomaly is still caught.",
+     "The diagnostics panel shows exactly what the model sees: anomaly score, health state, ensemble verdict. Three Isolation Forest models are combined so a single subsystem anomaly is still caught.",
      "Explainable ML diagnostics"),
     ("06_rag_evidence", "rag-evidence",
-     "Why did this happen? The RAG evidence tab retrieves the relevant engineering documentation and shows the actual passages with relevance scores. The probable cause and recommended action are grounded in those sources, not guessed.",
+     "Why did this happen? The RAG evidence tab retrieves the relevant engineering documentation and shows actual passages with relevance scores. The diagnosis is grounded in those sources, not guessed.",
      "RAG: evidence-based diagnosis"),
     ("07_granite", "granite",
-     "The reasoning layer formats everything into a structured assessment: risk level, probable cause, recommended action, and the exact documents used. It is built for IBM watsonx Granite, and runs on an honest deterministic fallback when no API key is set.",
+     "The reasoning layer formats everything into a structured assessment: risk level, probable cause, recommended action, and the exact documents used. Built for IBM watsonx Granite.",
      "IBM watsonx Granite reasoning"),
     ("08_scenarios", "scenario-compare",
-     "Compare failure modes side by side. Solar degradation drains the battery while temperature stays flat. Radiator degradation does the opposite: temperature climbs while power is untouched. The physics makes the distinction clear.",
+     "Compare failure modes side by side. Solar degradation drains the battery while temperature stays flat. Radiator degradation does the opposite. The physics makes the distinction clear.",
      "Scenario comparison"),
     ("10_threejs", "digital-twin",
-     "A physically rendered Three.js digital twin of the spacecraft is driven by the same live telemetry, so operators watch the asset respond in three dimensions as the fault evolves.",
+     "A Three.js digital twin of the spacecraft is driven by the same live telemetry, so operators watch the asset respond in three dimensions as the fault evolves.",
      "3D digital twin, driven by live telemetry"),
-    ("09_live_ingest", "live-ingest",
-     "This is the dynamic path. A virtual edge node streams frame by frame over a real JSON lines transport, and the production ensemble scores every incoming window. A physical ESP32 or Raspberry Pi speaking the same wire format drops in unchanged.",
-     "Live ingest: virtual edge node"),
-    ("11_console", "web-console",
-     "The React web console ties it all together. Behind the login screen, the same FastAPI backend serves scenario summaries, anomaly alerts with physics and RAG evidence, live ingest from the virtual edge node, and a trace of which pipeline code actually ran.",
-     "Web console and API backend"),
-    ("card_validation", "validation",
-     "The parameters are grounded in real NASA battery data, the physics is hand verified, and the full test suite passes: over one hundred tests across thirty suites.",
-     "Grounded in NASA data, 100+ tests passing"),
     ("card_close", "missionmind-close",
      "MissionMind turns raw telemetry into a clear answer: what failed, why, what to do, and how much time is left. Clone the repository and run one command to start the mission.",
      "MissionMind — one command to launch"),
