@@ -19,7 +19,7 @@ MissionMind is a satellite mission-operations stack that starts from physics and
 
 ## Demo
 
-**3.5-minute narrated walkthrough** of the whole stack, captured live from the running app: physics simulation, fault injection, ML detection, RUL, RAG evidence, Granite reasoning, scenario comparison, the 3D digital twin, live ingest, and the web console.
+**3.5-minute narrated walkthrough** of the whole stack, captured live from the running app: secure multi-user authentication, physics simulation, fault injection, ML detection, RUL, RAG evidence, Granite reasoning, scenario comparison, the 3D digital twin, live ingest, and the web console.
 
 <p align="center">
   <video controls width="860" src="demo/missionmind_demo.mp4"></video>
@@ -31,7 +31,7 @@ Thirty seconds of the dashboard: scrubbing the mission clock through a solar-arr
   <img src="demo.gif" alt="MissionMind dashboard scrubbing a 1-hour solar-failure mission" width="860">
 </p>
 
-Captured live from the running app. `demo.gif` regenerates from `streamlit run missionmind/viz/app.py` using the Mission Time Transport bar. The narrated MP4 regenerates with:
+Captured live from the running app. `demo.gif` regenerates from `streamlit run missionmind/viz/app.py` using the Mission Time Transport bar. The narrated MP4 includes the auth flow (signup → verify → login) and regenerates with:
 
 ```bash
 python scripts/capture_demo_frames.py   # live frames from the running dashboard (Playwright + system Chrome)
@@ -99,7 +99,7 @@ python -m missionmind.check_environment && python -m pytest missionmind/tests/ -
 
 A pre-commit hook (`.githooks/pre-commit`) and the GitHub Actions workflow (`.github/workflows/ci.yml`) enforce the repo's clean-sync contract: every change is committed under the `ojasvigoel598` identity, pushed, and verified; tests must pass and must not dirty the tree; secrets are refused at commit time and scanned in CI.
 
-Open `http://localhost:8501`. The 3D spacecraft CAD loads inside the dashboard; pick a scenario in the sidebar (Normal / Solar-Array Degradation / Radiator Degradation) and scrub the Mission Time Transport bar to jump anywhere in the 1-hour mission. The web console at `http://localhost:5173` is a lighter React front-end over the same scored telemetry: scenario switch, live scrubber, anomaly evidence, and a Live Ingest tab streaming a virtual ESP32 edge node through the production ensemble.
+Open `http://localhost:8501`. The 3D spacecraft CAD loads inside the dashboard; pick a scenario in the sidebar (Normal / Solar-Array Degradation / Radiator Degradation) and scrub the Mission Time Transport bar to jump anywhere in the 1-hour mission. The web console at `http://localhost:5173` starts with a secure login screen: sign up, verify your email (dev mode shows the token inline), log in, then access scenario summaries, anomaly alerts with physics + RAG evidence, live ingest from a virtual ESP32 edge node, and a pipeline execution trace — all behind authenticated, rate-limited, server-side-authorized endpoints.
 
 ### Environmental knobs
 
