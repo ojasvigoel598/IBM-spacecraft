@@ -1,98 +1,76 @@
 1
-00:00:00,350 --> 00:00:10,400
-MissionMind. An AI copilot for satellite mission operations. Built for
-the IBM advance space exploration challenge.
+00:00:00,350 --> 00:00:07,850
+MissionMind. An AI copilot for satellite mission operations.
+Built for the IBM advance space exploration challenge.
 
 2
-00:00:10,900 --> 00:00:22,600
-Every operator starts with secure authentication. Sign up, verify your
-email, log in. Every endpoint is protected server-side: rate limiting,
-brute force protection, HttpOnly session cookies. No credentials are
-ever exposed to the browser.
+00:00:08,350 --> 00:00:20,550
+Every operator starts with secure authentication.
+Sign up, verify, log in. Every endpoint is protected
+server-side: rate limited, brute-force protected.
+No credentials ever reach the browser.
 
 3
-00:00:23,100 --> 00:00:44,400
-This is the Mission Control dashboard. Every number on screen comes from
-a live physics simulation, solved in real time. Solar array output,
-battery state of charge, bus voltage, and spacecraft temperature.
-Nominal operation: solar holds five hundred twenty watts, battery full,
-temperatures stable.
+00:00:21,050 --> 00:00:35,250
+This is the Mission Control dashboard. Every number comes from
+a live physics simulation. Solar array output, battery state
+of charge, bus voltage, and temperature. Solar holds five
+hundred twenty watts, battery full, temperatures stable.
 
 4
-00:00:44,900 --> 00:01:01,840
-Now we inject a realistic failure: a degrading solar array. The fault
-ramps in over three hundred seconds, and the telemetry begins to change.
-Solar power falls toward two hundred fifty watts, net power goes
-negative, and the battery starts to drain.
+00:00:35,750 --> 00:00:49,950
+Now we inject a realistic failure: a degrading solar array.
+The fault ramps in over three hundred seconds. Solar power
+falls toward two hundred fifty watts, net power goes negative,
+and the battery starts to drain.
 
 5
-00:01:02,340 --> 00:01:14,790
-Watch the detector. The machine learning ensemble flags the anomaly at
-around thirteen minutes into the mission, well before the fault fully
-develops. System status flips to critical.
+00:00:50,450 --> 00:01:00,550
+Watch the detector. The machine learning ensemble flags the
+anomaly at around thirteen minutes, well before the fault
+fully develops. System status flips to critical.
 
 6
-00:01:15,290 --> 00:01:28,390
-MissionMind also predicts ahead. The remaining useful life counter is a
-leading indicator: it starts counting down before the detector confirms,
-telling the operator the battery has about ninety six minutes of margin.
+00:01:01,050 --> 00:01:12,550
+MissionMind also predicts ahead. The remaining useful life
+counter starts counting down before the detector confirms,
+telling the operator the battery has about ninety six
+minutes of margin.
 
 7
-00:01:28,890 --> 00:01:44,550
-The ML diagnostics panel shows exactly what the model sees: the anomaly
-score, the health state, the ensemble verdict, and confidence. Three
-Isolation Forest models are combined so a single subsystem anomaly is
-still caught.
+00:01:13,050 --> 00:01:24,250
+The diagnostics panel shows exactly what the model sees:
+anomaly score, health state, ensemble verdict. Three
+Isolation Forest models are combined so a single subsystem
+anomaly is still caught.
 
 8
-00:01:45,050 --> 00:02:00,140
-Why did this happen? The RAG evidence tab retrieves the relevant
-engineering documentation and shows the actual passages with relevance
-scores. The probable cause and recommended action are grounded in those
+00:01:24,750 --> 00:01:38,050
+Why did this happen? The RAG evidence tab retrieves the
+relevant engineering documentation and shows actual passages
+with relevance scores. The diagnosis is grounded in those
 sources, not guessed.
 
 9
-00:02:00,640 --> 00:02:17,550
-The reasoning layer formats everything into a structured assessment:
-risk level, probable cause, recommended action, and the exact documents
-used. It is built for IBM watsonx Granite, and runs on an honest
-deterministic fallback when no API key is set.
+00:01:38,550 --> 00:01:49,150
+The reasoning layer formats everything into a structured
+assessment: risk level, probable cause, recommended action,
+and the exact documents used. Built for IBM watsonx Granite.
 
 10
-00:02:18,050 --> 00:02:34,030
-Compare failure modes side by side. Solar degradation drains the battery
-while temperature stays flat. Radiator degradation does the opposite:
-temperature climbs while power is untouched. The physics makes the
-distinction clear.
+00:01:49,650 --> 00:02:00,350
+Compare failure modes side by side. Solar degradation drains
+the battery while temperature stays flat. Radiator degradation
+does the opposite. The physics makes the distinction clear.
 
 11
-00:02:34,530 --> 00:02:45,900
-A physically rendered Three.js digital twin of the spacecraft is driven
-by the same live telemetry, so operators watch the asset respond in
+00:02:00,850 --> 00:02:11,050
+A Three.js digital twin of the spacecraft is driven by the
+same live telemetry, so operators watch the asset respond in
 three dimensions as the fault evolves.
 
 12
-00:02:46,400 --> 00:03:04,270
-This is the dynamic path. A virtual edge node streams frame by frame
-over a real JSON lines transport, and the production ensemble scores
-every incoming window. A physical ESP32 or Raspberry Pi speaking the
-same wire format drops in unchanged.
-
-13
-00:03:04,770 --> 00:03:19,140
-The React web console ties it all together. Behind the login screen, the
-same FastAPI backend serves scenario summaries, anomaly alerts with
-physics and RAG evidence, live ingest from the virtual edge node, and a
-trace of which pipeline code actually ran.
-
-14
-00:03:19,640 --> 00:03:29,900
-The parameters are grounded in real NASA battery data, the physics is
-hand verified, and the full test suite passes: over one hundred tests
-across thirty suites.
-
-15
-00:03:30,400 --> 00:03:42,680
-MissionMind turns raw telemetry into a clear answer: what failed, why,
-what to do, and how much time is left. Clone the repository and run one
-command to start the mission.
+00:02:11,550 --> 00:02:24,050
+MissionMind turns raw telemetry into a clear answer: what
+failed, why, what to do, and how much time is left. Clone
+the repository and run one command to start the mission.
