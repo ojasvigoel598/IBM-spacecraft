@@ -1,8 +1,8 @@
 1
 00:00:00,350 --> 00:00:10,400
 What happens when a spacecraft fault occurs at three A M? The operator
-has minutes to decide. MissionMind gives them the answer, thirteen
-minutes before failure.
+has minutes to decide. MissionMind gives them the answer in seven
+seconds, thirty nine minutes before failure.
 
 2
 00:00:10,900 --> 00:00:32,200
@@ -18,9 +18,9 @@ early detection, the operator loses the mission.
 
 4
 00:00:50,140 --> 00:01:02,590
-At thirteen minutes, before the fault fully develops, the machine
-learning ensemble flags the anomaly. Zero false alarms during normal
-operations. The operator has time to act.
+Within seven seconds of fault onset, before the array fully degrades,
+the machine learning ensemble flags the anomaly. Near zero false alarms
+during normal operations. The operator has thirty nine minutes to act.
 
 5
 00:01:03,090 --> 00:01:16,190
@@ -53,6 +53,6 @@ failure. Operators see the asset, not just numbers.
 
 10
 00:02:18,040 --> 00:02:30,320
-MissionMind. Detected thirteen minutes early. Zero false alarms.
-Validated on real N A S A data. Clone the repository and run one command
-to start.
+MissionMind. Detected in seven seconds, thirty nine minutes early. Near
+zero false alarms. Validated on real N A S A data. Clone the repository
+and run one command to start.
