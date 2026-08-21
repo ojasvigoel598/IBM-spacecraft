@@ -1,64 +1,58 @@
 1
-00:00:00,350 --> 00:00:11,500
-What happens when a spacecraft fault occurs at three A M?
-The operator has minutes to decide. MissionMind gives them
-the answer, thirteen minutes before failure.
+00:00:00,350 --> 00:00:10,400
+What happens when a spacecraft fault occurs at three A M? The operator
+has minutes to decide. MissionMind gives them the answer, thirteen
+minutes before failure.
 
 2
-00:00:12,000 --> 00:00:26,500
-This is Mission Control. Every number comes from a live
-physics simulation. Solar: five hundred twenty watts.
-Battery full. Temperatures stable. The operator sees
-nominal, until the fault begins.
+00:00:10,900 --> 00:00:32,200
+This is Mission Control. Every number comes from a live physics
+simulation. Solar: five hundred twenty watts. Battery full. Temperatures
+stable. The operator sees nominal, until the fault begins.
 
 3
-00:00:27,000 --> 00:00:41,000
-A solar array starts degrading. Power falls toward two
-hundred fifty watts. Net power goes negative. The battery
-begins draining. Without early detection, the operator
-loses the mission.
+00:00:32,700 --> 00:00:49,640
+A solar array starts degrading. Power falls toward two hundred fifty
+watts. Net power goes negative. The battery begins draining. Without
+early detection, the operator loses the mission.
 
 4
-00:00:41,500 --> 00:00:55,500
-At thirteen minutes, before the fault fully develops, the
-machine learning ensemble flags the anomaly. Zero false
-alarms during normal operations. The operator has time
-to act.
+00:00:50,140 --> 00:01:02,590
+At thirteen minutes, before the fault fully develops, the machine
+learning ensemble flags the anomaly. Zero false alarms during normal
+operations. The operator has time to act.
 
 5
-00:00:56,000 --> 00:01:07,500
-Remaining useful life: ninety six minutes. Not a guess,
-a physics-grounded prediction. The operator knows exactly
-how long they have to respond.
+00:01:03,090 --> 00:01:16,190
+Remaining useful life: ninety six minutes. Not a guess, a physics-
+grounded prediction. The operator knows exactly how long they have to
+respond.
 
 6
-00:01:08,000 --> 00:01:21,000
-Why did this happen? The system retrieves the relevant
-engineering documentation, shows actual passages with
-relevance scores. The diagnosis is grounded in evidence,
-not guessed.
+00:01:16,690 --> 00:01:31,780
+Why did this happen? The system retrieves the relevant engineering
+documentation, shows actual passages with relevance scores. The
+diagnosis is grounded in evidence, not guessed.
 
 7
-00:01:21,500 --> 00:01:35,000
-IBM watsonx Granite formats the assessment: risk level,
-probable cause, recommended action. Every claim traced to
-a source document. Not a chatbot paragraph, an
-engineering report.
+00:01:32,280 --> 00:01:49,190
+IBM watsonx Granite formats the assessment: risk level, probable cause,
+recommended action. Every claim traced to a source document. Not a
+chatbot paragraph, an engineering report.
 
 8
-00:01:35,500 --> 00:01:47,500
-Solar degradation drains the battery. Radiator degradation
-overheats the bus. The physics makes the distinction clear.
-Two failure modes, two different operator responses.
+00:01:49,690 --> 00:02:05,670
+Solar degradation drains the battery. Radiator degradation overheats the
+bus. The physics makes the distinction clear. Two failure modes, two
+different operator responses.
 
 9
-00:01:48,000 --> 00:01:59,000
-A Three.js digital twin responds in real time. Solar
-arrays dim on P V failure. Operators see the asset,
-not just numbers.
+00:02:06,170 --> 00:02:17,540
+A Three.js digital twin responds in real time. Solar arrays dim on P V
+failure. Operators see the asset, not just numbers.
 
 10
-00:01:59,500 --> 00:02:11,000
-MissionMind. Detected thirteen minutes early. Zero false
-alarms. Validated on real N A S A data. Clone the
-repository and run one command to start.
+00:02:18,040 --> 00:02:30,320
+MissionMind. Detected thirteen minutes early. Zero false alarms.
+Validated on real N A S A data. Clone the repository and run one command
+to start.
