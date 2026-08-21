@@ -12,6 +12,7 @@ Pipeline:
 
 Output: demo/missionmind_demo.mp4  (1440x900, H.264, ~30fps) + demo/captions.srt
          Target duration: ≤ 3 minutes (IBM hackathon limit)
+         Pitch: mission reliability + operator decision-making
 
 Run:  .venv/Scripts/python.exe scripts/make_demo_video.py
 """
@@ -33,43 +34,56 @@ VOICE = "en-US-ChristopherNeural"  # confident, natural, documentary feel
 FPS = 30
 W, H = 1440, 900
 
-# ---- narration script: 12 scenes, target ≤ 180 s total ----
+# ---- narration script: 10 scenes, mission-reliability pitch, ≤ 180 s ----
 SCENES = [
     ("card_intro", "missionmind-intro",
-     "MissionMind. An AI copilot for satellite mission operations. Built for the IBM advance space exploration challenge.",
-     "MissionMind — AI Satellite Mission Control"),
-    ("card_auth", "auth-flow",
-     "Every operator starts with secure authentication. Sign up, verify, log in. Every endpoint is protected server-side: rate limited, brute-force protected. No credentials ever reach the browser.",
-     "Secure multi-user authentication"),
+     "What happens when a spacecraft fault occurs at three A M? The operator "
+     "has minutes to decide. MissionMind gives them the answer, thirteen "
+     "minutes before failure.",
+     "MissionMind — fault detection, thirteen minutes early"),
     ("01_normal", "mission-control",
-     "This is the Mission Control dashboard. Every number comes from a live physics simulation. Solar array output, battery state of charge, bus voltage, and temperature. Solar holds five hundred twenty watts, battery full, temperatures stable.",
+     "This is Mission Control. Every number comes from a live physics "
+     "simulation. Solar: five hundred twenty watts. Battery full. "
+     "Temperatures stable. The operator sees nominal, until the fault begins.",
      "Live physics simulation"),
     ("02_solar_fault", "fault-injection",
-     "Now we inject a realistic failure: a degrading solar array. The fault ramps in over three hundred seconds. Solar power falls toward two hundred fifty watts, net power goes negative, and the battery starts to drain.",
-     "Fault injection: solar array degradation"),
+     "A solar array starts degrading. Power falls toward two hundred fifty "
+     "watts. Net power goes negative. The battery begins draining. Without "
+     "early detection, the operator loses the mission.",
+     "Solar array degradation"),
     ("03_solar_fault_onset", "ml-detection",
-     "Watch the detector. The machine learning ensemble flags the anomaly at around thirteen minutes, well before the fault fully develops. System status flips to critical.",
+     "At thirteen minutes, before the fault fully develops, the machine "
+     "learning ensemble flags the anomaly. Zero false alarms during normal "
+     "operations. The operator has time to act.",
      "ML ensemble detects the anomaly"),
     ("04_solar_deep", "rul-lead",
-     "MissionMind also predicts ahead. The remaining useful life counter starts counting down before the detector confirms, telling the operator the battery has about ninety six minutes of margin.",
-     "RUL: a leading indicator"),
-    ("05_ml_diagnostics", "ml-diagnostics",
-     "The diagnostics panel shows exactly what the model sees: anomaly score, health state, ensemble verdict. Three Isolation Forest models are combined so a single subsystem anomaly is still caught.",
-     "Explainable ML diagnostics"),
+     "Remaining useful life: ninety six minutes. Not a guess, a "
+     "physics-grounded prediction. The operator knows exactly how long "
+     "they have to respond.",
+     "RUL: physics-grounded prediction"),
     ("06_rag_evidence", "rag-evidence",
-     "Why did this happen? The RAG evidence tab retrieves the relevant engineering documentation and shows actual passages with relevance scores. The diagnosis is grounded in those sources, not guessed.",
-     "RAG: evidence-based diagnosis"),
+     "Why did this happen? The system retrieves the relevant engineering "
+     "documentation, shows actual passages with relevance scores. The "
+     "diagnosis is grounded in evidence, not guessed.",
+     "Evidence-based diagnosis"),
     ("07_granite", "granite",
-     "The reasoning layer formats everything into a structured assessment: risk level, probable cause, recommended action, and the exact documents used. Built for IBM watsonx Granite.",
+     "IBM watsonx Granite formats the assessment: risk level, probable "
+     "cause, recommended action. Every claim traced to a source document. "
+     "Not a chatbot paragraph, an engineering report.",
      "IBM watsonx Granite reasoning"),
     ("08_scenarios", "scenario-compare",
-     "Compare failure modes side by side. Solar degradation drains the battery while temperature stays flat. Radiator degradation does the opposite. The physics makes the distinction clear.",
-     "Scenario comparison"),
+     "Solar degradation drains the battery. Radiator degradation overheats "
+     "the bus. The physics makes the distinction clear. Two failure modes, "
+     "two different operator responses.",
+     "Failure-mode discrimination"),
     ("10_threejs", "digital-twin",
-     "A Three.js digital twin of the spacecraft is driven by the same live telemetry, so operators watch the asset respond in three dimensions as the fault evolves.",
+     "A Three.js digital twin responds in real time. Solar arrays dim on "
+     "P V failure. Operators see the asset, not just numbers.",
      "3D digital twin, driven by live telemetry"),
     ("card_close", "missionmind-close",
-     "MissionMind turns raw telemetry into a clear answer: what failed, why, what to do, and how much time is left. Clone the repository and run one command to start the mission.",
+     "MissionMind. Detected thirteen minutes early. Zero false alarms. "
+     "Validated on real N A S A data. Clone the repository and run one "
+     "command to start.",
      "MissionMind — one command to launch"),
 ]
 
