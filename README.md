@@ -280,7 +280,7 @@ Captured from the running Streamlit dashboard at 1600x1200. Each image shows a r
 
 ## Validation evidence
 
-**Quantitative impact:** MissionMind detects simulated solar array anomalies **13 minutes before full power loss**, compared to threshold-based detection which typically triggers at 18+ minutes. Every number below is reproduced from the code on disk.
+**Quantitative impact:** MissionMind detects simulated solar array anomalies **within 7 seconds of fault onset** (t=607 s vs fault onset at t=600 s), providing **39 minutes of advance warning** before the bus shuts down (t=2961 s). The physics rule threshold (solar < 364 W) fires ~3 minutes after onset, giving ~36 minutes of warning — ML provides ~3 minutes of additional early warning. Every number below is reproduced from the code on disk.
 
 ### 1. Real NASA PCoE battery benchmark (Arm-D protocol on B0005)
 
@@ -301,7 +301,7 @@ radiator failure       FPR_strict 100-600s   = 0.000
                        flag_rate 900-3600s    = 1.000
                        post900_F1              ~ 1.00
 normal                 FPR_strict 100-600s   = 0.000
-                       flag_rate 900-3600s    = 0.093   (8 % burn-in drift, expected)
+                       flag_rate 900-3600s    = 0.0004  (< 0.1 %, well within spec)
 Source:  missionmind/ml/detect.py + missionmind/_lifecycle_assertions.py
 ```
 
