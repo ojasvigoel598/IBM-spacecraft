@@ -38,9 +38,9 @@ W, H = 1440, 900
 SCENES = [
     ("card_intro", "missionmind-intro",
      "What happens when a spacecraft fault occurs at three A M? The operator "
-     "has minutes to decide. MissionMind gives them the answer, thirteen "
-     "minutes before failure.",
-     "MissionMind — fault detection, thirteen minutes early"),
+     "has minutes to decide. MissionMind gives them the answer in seven "
+     "seconds, thirty nine minutes before failure.",
+     "MissionMind — fault detection, thirty nine minutes early"),
     ("01_normal", "mission-control",
      "This is Mission Control. Every number comes from a live physics "
      "simulation. Solar: five hundred twenty watts. Battery full. "
@@ -52,9 +52,9 @@ SCENES = [
      "early detection, the operator loses the mission.",
      "Solar array degradation"),
     ("03_solar_fault_onset", "ml-detection",
-     "At thirteen minutes, before the fault fully develops, the machine "
-     "learning ensemble flags the anomaly. Zero false alarms during normal "
-     "operations. The operator has time to act.",
+     "Within seven seconds of fault onset, before the array fully degrades, "
+     "the machine learning ensemble flags the anomaly. Near zero false alarms "
+     "during normal operations. The operator has thirty nine minutes to act.",
      "ML ensemble detects the anomaly"),
     ("04_solar_deep", "rul-lead",
      "Remaining useful life: ninety six minutes. Not a guess, a "
@@ -81,9 +81,9 @@ SCENES = [
      "P V failure. Operators see the asset, not just numbers.",
      "3D digital twin, driven by live telemetry"),
     ("card_close", "missionmind-close",
-     "MissionMind. Detected thirteen minutes early. Zero false alarms. "
-     "Validated on real N A S A data. Clone the repository and run one "
-     "command to start.",
+     "MissionMind. Detected in seven seconds, thirty nine minutes early. "
+     "Near zero false alarms. Validated on real N A S A data. Clone the "
+     "repository and run one command to start.",
      "MissionMind — one command to launch"),
 ]
 
