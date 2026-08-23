@@ -21,6 +21,7 @@ All expected values are hand-derived literals.
 import os
 import sys
 
+import warnings
 import numpy as np
 import pandas as pd
 
@@ -84,7 +85,9 @@ def test_predictive_horizon_hand_derived():
     cycles = np.arange(20)
     cap = 2.0 - 0.1 * cycles
     d = 6  # first cycle with cap < 1.5
-    score = np.array([1.0 / (d - c + 1) for c in cycles])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        score = np.array([1.0 / (d - c + 1) for c in cycles])
     df = pd.DataFrame({"cycle": cycles, "capacity": cap, "score": score})
     res = predictive_horizon_metrics(df, score_col="score", capacity_col="capacity",
                                      cycle_col="cycle", horizons=(2,), eol_fraction=0.75,
@@ -134,7 +137,9 @@ def test_predictive_horizon_imperfect_threshold():
     cycles = np.arange(20)
     cap = 2.0 - 0.1 * cycles
     d = 6
-    score = np.array([1.0 / (d - c + 1) for c in cycles])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        score = np.array([1.0 / (d - c + 1) for c in cycles])
     df = pd.DataFrame({"cycle": cycles, "capacity": cap, "score": score})
     res = predictive_horizon_metrics(df, score_col="score", capacity_col="capacity",
                                      cycle_col="cycle", horizons=(2,), eol_fraction=0.75,

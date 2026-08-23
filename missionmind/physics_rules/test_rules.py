@@ -29,9 +29,7 @@ def test_rules():
     rad_csv = os.path.join(base, 'run_radiator_failure.csv')
 
     for f in [normal_csv, solar_csv, rad_csv]:
-        if not os.path.exists(f):
-            print(f"Missing {f}, run run_scenarios first")
-            return False
+        assert os.path.exists(f), f"Missing {f}, run run_scenarios first"
 
     print("=== Testing on run_normal.csv ===")
     df_n, findings_n = evaluate_on_csv(normal_csv)
@@ -86,7 +84,6 @@ def test_rules():
     assert len(therm_after) >= len(after_900_r)*0.5, "Should flag radiator_degradation after t≈900s"
 
     print("PASS all rule tests")
-    return True
 
 if __name__ == "__main__":
     test_rules()
