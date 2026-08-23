@@ -21,7 +21,7 @@ MissionMind is a satellite mission-operations stack that starts from physics and
 
 ## Demo
 
-**2.5-minute narrated walkthrough** of the whole stack, captured live from the running app: secure multi-user authentication, live physics simulation, fault injection, ML detection, RUL, diagnostics, RAG evidence, Granite reasoning, scenario comparison, and the 3D digital twin.
+**2-minute narrated walkthrough** of the whole stack, captured live from the running app. The video follows a judge-focused narrative: problem → detection → pipeline → evidence → results.
 
 <p align="center">
   <video controls width="860" src="demo/missionmind_demo.mp4"></video>
@@ -33,11 +33,12 @@ Thirty seconds of the dashboard: scrubbing the mission clock through a solar-arr
   <img src="demo.gif" alt="MissionMind dashboard scrubbing a 1-hour solar-failure mission" width="860">
 </p>
 
-Captured live from the running app. `demo.gif` regenerates from `streamlit run missionmind/viz/app.py` using the Mission Time Transport bar. The narrated MP4 includes the auth flow (signup → verify → login) and regenerates with:
+Captured live from the running app. `demo.gif` regenerates from `streamlit run missionmind/viz/app.py` using the Mission Time Transport bar. The narrated MP4 regenerates with:
 
 ```bash
-python scripts/capture_demo_frames.py   # live frames from the running dashboard (Playwright + system Chrome)
-python scripts/make_demo_video.py       # edge-tts narration + moviepy assembly -> demo/missionmind_demo.mp4
+python scripts/capture_bright_frames.py     # live frames from the running dashboard (Playwright + system Chrome)
+python scripts/brighten_frames.py           # post-process for video visibility
+python scripts/build_demo_v2.py            # edge-tts narration + moviepy assembly -> demo/missionmind_demo.mp4
 ```
 
 ---
