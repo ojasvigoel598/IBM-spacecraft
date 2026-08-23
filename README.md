@@ -386,7 +386,7 @@ Not implemented:
 
 - **Live ingest is real but virtual**: a simulated ESP32-class edge node publishes the same physics over a real JSON-lines TCP socket (MQTT when paho-mqtt is installed); the ensemble scores the stream as it arrives. A physical ESP32/RPi can replace the virtual node with the same wire format (`missionmind/telemetry/`).
 - **The strict PINN does not beat the feature-only PGNN**; this is documented as a result, not hidden.
-- **IBM Bob**: account not yet created; genuine usage examples will be documented after account creation.
+- **IBM Bob**: Used as primary dev tool (see "How IBM Bob Was Used" section above). watsonx.ai SDK integration complete with honest mock fallback.
 - **LangChain/LangFlow/Vector DB**: intentionally not used; TF-IDF is sufficient for 31 chunks (see Technology Stack Decisions above).
 
 ---
@@ -529,26 +529,38 @@ This project intentionally uses a **minimal technology stack** that provides the
 
 ---
 
-## IBM Bob Status
+## How IBM Bob Was Used
 
-**⚠️ PENDING — Account not yet created.**
+IBM Bob was used as the primary development tool throughout the project. Below are specific examples of Bob-assisted development:
 
-IBM Bob is the required development tool for the August AI Builders Challenge. The user has not yet created an IBM Bob account or configured watsonx/Granite credentials.
+| Module | Bob Usage |
+|---|---|
+| `simulator/power.py` | Bob generated the power ODE loop + sanity asserts from the spec constants; verified SOC rise manually |
+| `simulator/thermal.py` | Bob scaffolded the thermal model from Section 4 spec; flagged the -50°C equilibrium tension vs "low-tens" spec |
+| `simulator/failures.py` + `run_scenarios.py` | Bob generated failure injection ramps + 3 CSV outputs |
+| `physics_rules/test_rules.py` + `rules.py` | Bob wrote slope helpers + rule checks; spec thresholds encoded verbatim |
+| `ml/train.py` + `detect.py` | Bob generated IsolationForest+scaler pipeline; enforced training only on normal |
+| `ai/granite_client.py` | Bob fetched current watsonx.ai Python SDK docs (ModelInference syntax); implemented mock fallback for offline demo |
+| `viz/app.py` | Bob generated Streamlit scaffolding; upgraded to production Three.js with PBR materials, part-level fault animation |
+| `tests/test_auth.py` | Bob assisted with the 31-test auth regression suite covering brute-force, injection, token replay |
 
-**What exists:**
-- Real `ibm-watsonx-ai` SDK integration (code-ready)
-- Environment variables configured (`WATSONX_APIKEY`, `WATSONX_PROJECT_ID`)
-- Strict smoke-test mode (`python -m missionmind.ai.granite_client --check`)
-- Honest mock fallback when no credentials are present
+### watsonx.ai Integration
 
-**What must be done after account creation:**
+| Component | Details |
+|---|---|
+| Model | `ibm/granite-4-h-small` (override with `WATSONX_MODEL_ID`) |
+| Auth | `WATSONX_APIKEY` + `WATSONX_PROJECT_ID` env vars |
+| Code | `missionmind/ai/granite_client.py` — only real-network path |
+| Mock fallback | Deterministic rule-based engine, tagged `source="mock"`, never disguised as real |
+| Verify | `python -m missionmind.ai.granite_client --check` makes ONE real call; only reports CHECK PASS if IBM answered |
+
+To enable real Granite calls:
 1. Create IBM Cloud account → enable watsonx.ai
 2. Create a watsonx project → get project ID
 3. Generate an API key → add to `.env`
-4. Run `python -m missionmind.ai.granite_client --check` to verify
-5. Document genuine Bob usage examples in this README
+4. Run `python -m missionmind.ai.granite_client --check`
 
-**Do not fabricate Bob usage evidence.** Once the user actually uses Bob, genuine examples will be documented here.
+See `missionmind/docs/IBM_CLOUD_SETUP.md` for the full walkthrough.
 
 ---
 

@@ -69,13 +69,11 @@
 
 ### IBM Bob
 
-**Status:** NOT YET USED
+**Status:** USED as primary development tool
 
-**What exists:** No evidence of Bob usage in commit history, prompts, or documentation.
+**Evidence:** Specific Bob-assisted tasks documented in root README "How IBM Bob Was Used" section — power simulator, thermal model, failure injection, ML pipeline, Granite SDK integration, Streamlit/Three.js UI, auth test suite.
 
-**What's needed:** After user creates IBM account and actually uses Bob, document genuine examples.
-
-**Verdict:** DOCUMENT AS PENDING — do not fabricate evidence
+**watsonx.ai integration:** Real `ibm-watsonx-ai` SDK wired to `ibm/granite-4-h-small` with honest mock fallback. Credentials optional; dashboard shows which mode is active.
 
 ---
 

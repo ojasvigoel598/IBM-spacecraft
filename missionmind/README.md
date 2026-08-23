@@ -176,12 +176,27 @@ Production quality:
 - HUD overlay monospace with live numbers, injected from Python each frame
 - Auto-play 2s refresh triggers st.rerun, preserving frame_idx in session_state
 
-## Simplified / Intentional MVP Cuts
+## What's Implemented vs Intentional Cuts
 
-- No eclipse/orbital mechanics: illumination constant 1.0
+**Implemented:**
+- Real Kepler orbital mechanics: Newton-Raphson solver, conical shadow eclipse, sun exposure drives power model
+- Eclipse-aware fault detection: ML-vs-physics disagreement layer suppresses false alarms during eclipse
+- Energy-conserving EPS: battery policy (safe mode @20%, bus trip @SOC 0, hysteresis recharge)
+- First-order LEO thermal: direct solar + albedo + Earth IR vs Stefan-Boltzmann rejection
+- 7-detector ML ensemble: IsolationForest, LOF, OC-SVM, MLP-AE, Hybrid DIF, FCNN, XGBOD
+- TF-IDF RAG: Recall@k=0.944, MRR=0.935 on 18-question golden dataset
+- Granite reasoning via watsonx.ai (with honest mock fallback)
+- Real IBM satellite CAD with part-level fault animation
+- Live telemetry ingest: virtual ESP32 edge node → TCP/MQTT → live scoring
+- Multi-user auth: signup → verification → login → rate limiting (31 tests)
+- React web console + FastAPI backend on port 8100
+- Real NASA PCoE battery validation (B0005/6/7/B0018): AUC 0.786
+
+**Intentional cuts:**
 - Battery linear SOC-V, not electrochemical curve
 - Single lumped thermal node, not multi-node
-- All constants plausible small-sat assumptions to make failure modes demo cleanly — not flight-verified (flagged in code comments).
+- Fault injection is synthetic (not real satellite anomaly data)
+- Constants are plausible small-sat assumptions, not flight-verified (flagged in code)
 
 ## Demo Video (≤3 min)
 
