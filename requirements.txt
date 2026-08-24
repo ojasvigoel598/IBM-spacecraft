@@ -35,6 +35,7 @@ nbformat>=5.9.0
 nbclient>=0.10.0
 nbconvert>=7.16.0
 ipykernel>=6.29.0
+jupyterlab>=4.0.0       # interactive notebook UI (jupyter lab / jupyter notebook)
 
 # ---- OPTIONAL (tooling only; never fails the env gate) --------------------
 python-dotenv>=1.0.0  # .env convenience; code reads os.environ directly
