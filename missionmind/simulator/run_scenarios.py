@@ -35,6 +35,9 @@ from missionmind.simulator.failures import (
     SOLAR_FINAL_FACTOR, EPSILON_A_NOMINAL, EPSILON_A_FINAL
 )
 from missionmind.simulator.orbital import orbit_columns
+from missionmind.simulator.vibration import (
+    compute_micro_vibration, vibration_adjusted_rul,
+)
 
 # The three scenario files the project generates/replays. Kept at module level
 # so the manifest and the stale-checker share the exact same mapping as main().
@@ -49,7 +52,7 @@ SCENARIOS = {
 # conical-shadow eclipse model) changes generator_signature().
 _SIM_SOURCE_FILES = (
     "run_scenarios.py", "orbital.py", "power.py", "thermal.py",
-    "failures.py", "config.py",
+    "failures.py", "config.py", "vibration.py",
 )
 
 
