@@ -227,6 +227,34 @@ One telemetry sample through the whole stack:
 
 ---
 
+## Digital Twin Status (Grieves/NASA definitions)
+
+MissionMind maps to the formal digital twin definitions from NASA (Shafto et al. 2012) and Grieves (2002/2017). See [DIGITAL_TWIN_ARCHITECTURE.md](missionmind/docs/DIGITAL_TWIN_ARCHITECTURE.md) for the full 50-source research analysis.
+
+| Grieves Element | Status | Implementation |
+|---|---|---|
+| Physical entity | ✅ (proxy) | `VirtualEdgeNode` emits identical telemetry to real ESP32/RPi hardware |
+| Virtual entity | ✅ | Kepler propagator, eclipse geometry, EPS, thermal, ML ensemble, RUL prognostics |
+| Data connection (P→V) | ✅ | Telemetry frames: solar, voltage, temperature, device state |
+| Data connection (V→P) | ✅ | `send_command()`: reset, set_rate, inject/clear faults |
+| Predictive capability | ✅ | RUL prognostics (trend/similarity/PINN) with vibration-adjusted calendar time |
+| Informs decisions | ✅ | Adaptive layer: ML-vs-physics disagreement, eclipse-aware fault suppression |
+
+**What makes this more than a simulation:**
+- Real Kepler propagation (Newton-Raphson solver, verified to 1e-12)
+- Eclipse-aware fault detection (zero false positives on orbital shadow passes)
+- Vibration-adjusted RUL via Arrhenius-Coffin-Manson (reaction-wheel micro-vibration)
+- NASA-validated ML (AUC 0.786 on real B0005 battery data)
+- Hardware abstraction (EdgeDevice ABC — real ESP32 swap with zero app change)
+- CAD-driven geometry (real Fusion 360 STL, not a procedural box)
+
+**Known gaps** (would require hardware to close):
+- Real spacecraft telemetry (currently simulated)
+- Kalman filter / data assimilation for model state correction
+- Fleet learning across multiple spacecraft
+
+---
+
 ## Why PINN doesn't work (and why that matters)
 
 **The most surprising finding in this repo:** a strict physics-informed neural network (PINN) — the kind every paper says should win — loses badly to a feature-only model that merely *gates* on physics. On the real NASA B0005 dataset:
