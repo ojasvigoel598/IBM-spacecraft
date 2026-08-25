@@ -1,6 +1,10 @@
 {
   "name": "missionmind",
   "private": true,
+  "scripts": {
+    "build": "tsc -b web/tsconfig.json && vite build web --outDir ../dist",
+    "preview": "vite preview web"
+  },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
     "@tailwindcss/vite": "^4.0.0",
