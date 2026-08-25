@@ -1,0 +1,8 @@
+{
+  "name": "missionmind",
+  "private": true,
+  "scripts": {
+    "build": "cd web && npm run build",
+    "install-deps": "cd web && npm install"
+  }
+}
