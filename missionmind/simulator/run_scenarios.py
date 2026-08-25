@@ -132,6 +132,8 @@ def run_scenario(failure_mode: str = "none", duration_s: int = 3600, soc_init: f
     bus_state = BUS_NORMAL
     import numpy as np
     rng = np.random.default_rng(0) if add_noise else None
+    # Reaction-wheel speed (RPM) — nominal 3000, optional sinusoidal variation
+    RW_SPEED_RPM = 3000.0
 
     for t in range(duration_s):
         # P7: orbital illumination first - the SAME eclipse state drives the
@@ -182,6 +184,14 @@ def run_scenario(failure_mode: str = "none", duration_s: int = 3600, soc_init: f
         # can never disagree.
         if add_orbit:
             row.update(orb)
+
+        # Micro-vibration: reaction-wheel disturbance + battery fade acceleration
+        mv = compute_micro_vibration(
+            RW_SPEED_RPM, n_wheels=4, temperature_k=T_k)
+        row["rw_g_rms"] = mv.g_rms
+        row["rw_pointing_jitter_arcsec"] = mv.pointing_jitter_arcsec
+        row["rw_battery_vibration_factor"] = mv.battery_vibration_factor
+
         rows.append(row)
 
         soc = soc_new
