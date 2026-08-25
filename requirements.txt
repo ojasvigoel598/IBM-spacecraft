@@ -42,3 +42,4 @@ python-dotenv>=1.0.0  # .env convenience; code reads os.environ directly
 pillow>=10.0.0        # demo gif / screenshot tooling (.freebuff/)
 requests>=2.31.0      # HTTP helpers (scratch tooling)
 gmsh>=4.11.0          # STEP/STL CAD export utilities (satellite model files)
+trimesh>=4.0.0         # satellite CAD geometry analysis (surface area, volume, cross-sections)
