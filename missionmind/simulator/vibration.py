@@ -357,7 +357,7 @@ if __name__ == "__main__":
         f = rw_disturbance_force(rpm)
         t = rw_disturbance_torque(rpm)
         g = g_rms_from_speed(rpm)
-        print(f"  RW @ {rpm:5d} RPM: F={f:.5f} N, τ={t:.6f} Nm, g_rms={g:.5f}")
+        print(f"  RW @ {rpm:5d} RPM: F={f:.5f} N, T={t:.6f} Nm, g_rms={g:.5f}")
 
     # Test 2: Combined state for 4-wheel config
     print("\n--- 4-wheel configuration, nominal speed (3000 RPM) ---")
@@ -365,7 +365,7 @@ if __name__ == "__main__":
     print(f"  Total force:    {state.disturbance_force_n:.6f} N")
     print(f"  Total torque:   {state.disturbance_torque_nm:.6f} Nm")
     print(f"  g_rms:          {state.g_rms:.5f}")
-    print(f"  Pointing jitter: {state.pointing_jitter_arcsec:.2f} arcsec (1σ)")
+    print(f"  Pointing jitter: {state.pointing_jitter_arcsec:.2f} arcsec (1-sigma)")
     print(f"  Battery AF:     {state.battery_vibration_factor:.4f}")
 
     print("\n--- 4-wheel config, high speed (6500 RPM) ---")
@@ -373,7 +373,7 @@ if __name__ == "__main__":
     print(f"  Total force:    {state_hi.disturbance_force_n:.6f} N")
     print(f"  Total torque:   {state_hi.disturbance_torque_nm:.6f} Nm")
     print(f"  g_rms:          {state_hi.g_rms:.5f}")
-    print(f"  Pointing jitter: {state_hi.pointing_jitter_arcsec:.2f} arcsec (1σ)")
+    print(f"  Pointing jitter: {state_hi.pointing_jitter_arcsec:.2f} arcsec (1-sigma)")
     print(f"  Battery AF:     {state_hi.battery_vibration_factor:.4f}")
 
     # Test 3: Vibration-adjusted RUL
@@ -381,7 +381,7 @@ if __name__ == "__main__":
     base_rul = 50.0  # EFC
     for g in (0.001, 0.01, 0.05, 0.10, 0.20):
         adj = vibration_adjusted_rul(base_rul, g)
-        print(f"  g_rms={g:.3f}: RUL {base_rul:.0f} → {adj:.1f} EFC "
+        print(f"  g_rms={g:.3f}: RUL {base_rul:.0f} -> {adj:.1f} EFC "
               f"({(1-adj/base_rul)*100:+.1f}%)")
 
     # Test 4: Degraded wheel (health 50%)
