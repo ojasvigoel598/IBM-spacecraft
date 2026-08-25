@@ -108,6 +108,15 @@ bash scripts/install-hooks.sh
 
 # 7. verify the environment and run the tests (CI runs the same checks on every push)
 python -m missionmind.check_environment && python -m pytest missionmind/tests/ -q
+
+# 8. run the Jupyter notebook (full ML analysis, ~15-25 min)
+jupyter lab                                          # opens JupyterLab
+# then open MissionMind_Full_ML_Analysis.ipynb and select the 'missionmind' kernel
+# or run headless:
+python -m jupyter nbconvert --to notebook --execute \
+  --ExecutePreprocessor.kernel_name=missionmind \
+  --output .freebuff/notebook_output.ipynb \
+  MissionMind_Full_ML_Analysis.ipynb
 ```
 
 A pre-commit hook (`.githooks/pre-commit`) and the GitHub Actions workflow (`.github/workflows/ci.yml`) enforce the repo's clean-sync contract: every change is committed under the `ojasvigoel598` identity, pushed, and verified; tests must pass and must not dirty the tree; secrets are refused at commit time and scanned in CI.
@@ -150,6 +159,8 @@ scoring works with no training step.
 The Streamlit dashboard is a Python server app and does not run on Vercel;
 use it locally (`streamlit run missionmind/viz/app.py`) or on Streamlit
 Community Cloud.
+
+**Detailed deploy guide:** [`missionmind/docs/VERCEL_DEPLOY.md`](missionmind/docs/VERCEL_DEPLOY.md)
 
 ### Security
 
