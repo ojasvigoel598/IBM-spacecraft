@@ -1,7 +1,4 @@
 {
   "name": "missionmind",
-  "private": true,
-  "engines": {
-    "node": "22.x"
-  }
+  "private": true
 }
