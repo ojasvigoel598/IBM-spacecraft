@@ -446,6 +446,55 @@ def cycles_to_days(cycles, altitude_km=550.0, efc_per_orbit=None):
     return cycles / efc_per_orbit * T / 86400.0
 
 
+def vibration_adjusted_cycles_to_days(
+    cycles,
+    g_rms,
+    altitude_km=550.0,
+    efc_per_orbit=None,
+    temperature_k=298.15,
+):
+    """Convert EFC of capacity fade to mission days, accounting for vibration.
+
+    The Arrhenius-Coffin-Manson acceleration factor from
+    missionmind.simulator.vibration scales the fade rate:
+
+        days_adjusted = days_base / AF_vibration
+
+    where AF_vibration > 1 means vibration accelerates degradation.
+
+    This is the equation that closes the gap between "simulation" and
+    "digital twin" -- the virtual model now accounts for mechanical stress
+    that the physical satellite actually experiences (reaction-wheel micro-
+    vibration from the McMullan power-law model).
+
+    Parameters
+    ----------
+    cycles : float
+        RUL in equivalent full cycles (EFC).
+    g_rms : float
+        Overall vibration severity (g_rms) from the micro-vibration model.
+    altitude_km : float
+        Orbit altitude for Kepler period (km).
+    efc_per_orbit : float or None
+        Measured EFC rate from the EPS simulation.
+    temperature_k : float
+        Battery temperature (K) for Arrhenius thermal acceleration.
+
+    Returns
+    -------
+    float
+        Adjusted RUL in mission days.
+    """
+    try:
+        from missionmind.simulator.vibration import vibration_adjusted_rul
+        adjusted_cycles = vibration_adjusted_rul(
+            cycles, g_rms, temperature_k=temperature_k
+        )
+    except ImportError:
+        adjusted_cycles = cycles  # vibration module not available
+    return cycles_to_days(adjusted_cycles, altitude_km, efc_per_orbit)
+
+
 # --------------------------------------------------------------------------- #
 def main():
     print("=" * 78)
@@ -488,6 +537,16 @@ def main():
               f"{86400/T:.2f} orbits/day")
         print(f"    EFC/orbit: {measured:.4f} measured-from-EPS (old assumption was 1.0); "
               f"50 EFC = {cycles_to_days(50, alt, measured):.1f} days")
+
+    print("\nVibration-adjusted RUL (Arrhenius-Coffin-Manson):")
+    from missionmind.simulator.vibration import (
+        compute_micro_vibration, vibration_adjusted_rul)
+    for rpm in (2000, 3000, 5000, 6500):
+        mv = compute_micro_vibration(rpm, n_wheels=4)
+        adj = vibration_adjusted_rul(50.0, mv.g_rms, temperature_k=298.15)
+        adj_hot = vibration_adjusted_rul(50.0, mv.g_rms, temperature_k=323.15)
+        print(f"  RW {rpm:5d} RPM: g_rms={mv.g_rms:.4f}, "
+              f"50 EFC -> {adj:.1f} adj (25C), {adj_hot:.1f} adj (50C)")
     print("\nDone.")
 
 
