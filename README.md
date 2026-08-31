@@ -35,7 +35,7 @@ A simulator generates one hour of power and thermal telemetry, an ensemble of un
 **2-minute narrated walkthrough** of the whole stack, captured live from the running app. The video follows a judge-focused narrative: problem → detection → pipeline → evidence → results.
 
 <p align="center">
-  <video controls width="860" src="demo/missionmind_demo.mp4"></video>
+  <video controls width="860" src="demo/final_demo.mp4"></video>
 </p>
 
 Thirty seconds of the dashboard: scrubbing the mission clock through a solar-array failure, watching telemetry degrade, the RUL chip count down, and the 3D spacecraft react on the same simulated clock.
