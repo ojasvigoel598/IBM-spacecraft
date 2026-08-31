@@ -101,6 +101,10 @@ MissionMind is a spacecraft **digital twin** that detects faults **25× faster**
 
 ## CAD Assets
 
+<p align="center">
+  <img src="screenshots/cad-render.png" alt="IBM Satellite CAD render from Fusion 360 STL" width="400" style="border-radius: 8px;">
+</p>
+
 The 3D satellite is a real [Fusion 360](https://www.autodesk.com/products/fusion-360/) export — not a procedural placeholder. All three exchange formats ship in the repo:
 
 | Format | File | Details |
