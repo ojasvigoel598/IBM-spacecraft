@@ -64,3 +64,6 @@ Thumbs.db
 htmlcov/
 
 .vercel
+
+# Banner export — local only, never committed
+bannerdownload/

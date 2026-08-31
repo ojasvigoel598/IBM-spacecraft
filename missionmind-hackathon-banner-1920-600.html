@@ -1,0 +1,429 @@
+
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MissionMind Banner</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a14; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+
+  .banner {
+    width: 1920px;
+    height: 600px;
+    background: #050510;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+  }
+
+  /* Star field */
+  .stars {
+    position: absolute;
+    inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 120px 40px, #fff 0%, transparent 100%),
+      radial-gradient(1px 1px at 340px 180px, #cde 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 560px 90px, #fff 0%, transparent 100%),
+      radial-gradient(1px 1px at 780px 260px, #bdf 0%, transparent 100%),
+      radial-gradient(1px 1px at 900px 50px, #fff 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 1100px 140px, #cce 0%, transparent 100%),
+      radial-gradient(1px 1px at 1320px 310px, #fff 0%, transparent 100%),
+      radial-gradient(1px 1px at 1540px 80px, #bde 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 1700px 200px, #fff 0%, transparent 100%),
+      radial-gradient(1px 1px at 1850px 420px, #cdf 0%, transparent 100%),
+      radial-gradient(1px 1px at 200px 400px, #ddf 0%, transparent 100%),
+      radial-gradient(1px 1px at 450px 480px, #fff 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 680px 520px, #cce 0%, transparent 100%),
+      radial-gradient(1px 1px at 960px 460px, #fff 0%, transparent 100%),
+      radial-gradient(1px 1px at 1200px 540px, #bdf 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 1450px 490px, #fff 0%, transparent 100%),
+      radial-gradient(1px 1px at 1620px 380px, #cde 0%, transparent 100%),
+      radial-gradient(1px 1px at 60px 230px, #fff 0%, transparent 100%),
+      radial-gradient(1px 1px at 820px 350px, #ddf 0%, transparent 100%),
+      radial-gradient(1.5px 1.5px at 1780px 100px, #fff 0%, transparent 100%);
+    opacity: 0.85;
+  }
+
+  /* Deep space blue nebula glow on left */
+  .nebula-left {
+    position: absolute;
+    left: -160px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 900px;
+    height: 900px;
+    background: radial-gradient(ellipse at center, rgba(30,60,180,0.22) 0%, rgba(10,20,80,0.10) 45%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  /* Accent glow right */
+  .nebula-right {
+    position: absolute;
+    right: -200px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 700px;
+    height: 700px;
+    background: radial-gradient(ellipse at center, rgba(80,20,160,0.18) 0%, rgba(40,10,80,0.08) 45%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  /* Orbit ring graphic */
+  .orbit-ring {
+    position: absolute;
+    right: 160px;
+    top: 50%;
+    transform: translateY(-50%) rotateX(72deg);
+    width: 420px;
+    height: 420px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(59,130,212,0.30);
+  }
+  .orbit-ring-2 {
+    position: absolute;
+    right: 130px;
+    top: 50%;
+    transform: translateY(-50%) rotateX(72deg);
+    width: 480px;
+    height: 480px;
+    border-radius: 50%;
+    border: 1px solid rgba(59,130,212,0.16);
+  }
+  .orbit-ring-3 {
+    position: absolute;
+    right: 200px;
+    top: 50%;
+    transform: translateY(-50%) rotateX(72deg);
+    width: 360px;
+    height: 360px;
+    border-radius: 50%;
+    border: 1px solid rgba(100,60,200,0.18);
+  }
+
+  /* Satellite dot on orbit */
+  .sat-dot {
+    position: absolute;
+    right: 154px;
+    top: calc(50% - 207px);
+    width: 10px;
+    height: 10px;
+    background: #3b82d4;
+    border-radius: 50%;
+    box-shadow: 0 0 12px 4px rgba(59,130,212,0.7), 0 0 24px 8px rgba(59,130,212,0.3);
+  }
+
+  /* Planet graphic */
+  .planet {
+    position: absolute;
+    right: 240px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #1a3a6a 0%, #0c1e3e 50%, #060e20 100%);
+    box-shadow: inset -30px -20px 40px rgba(0,0,0,0.7), 0 0 40px rgba(30,80,200,0.2), 0 0 80px rgba(20,50,140,0.12);
+    overflow: hidden;
+  }
+  .planet-shimmer {
+    position: absolute;
+    top: 20%;
+    left: 15%;
+    width: 60%;
+    height: 25%;
+    background: rgba(100,160,255,0.06);
+    border-radius: 50%;
+    transform: rotate(-20deg);
+  }
+  .planet-shimmer-2 {
+    position: absolute;
+    top: 48%;
+    left: 25%;
+    width: 40%;
+    height: 14%;
+    background: rgba(80,130,220,0.05);
+    border-radius: 50%;
+    transform: rotate(-15deg);
+  }
+
+  /* Left content panel */
+  .content {
+    position: relative;
+    z-index: 10;
+    padding: 0 100px;
+    max-width: 1160px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* IBM badge */
+  .ibm-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(59,130,212,0.12);
+    border: 1px solid rgba(59,130,212,0.30);
+    border-radius: 4px;
+    padding: 5px 14px;
+    margin-bottom: 24px;
+    width: fit-content;
+  }
+  .ibm-badge-dot {
+    width: 7px;
+    height: 7px;
+    background: #3b82d4;
+    border-radius: 50%;
+    box-shadow: 0 0 6px 2px rgba(59,130,212,0.6);
+  }
+  .ibm-badge-text {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6baee8;
+  }
+
+  /* Main title */
+  .title {
+    font-size: 88px;
+    font-weight: 800;
+    line-height: 1.0;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+    margin-bottom: 8px;
+  }
+  .title-accent {
+    color: transparent;
+    -webkit-text-stroke: 1.5px rgba(100,170,255,0.55);
+    font-size: 88px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  /* Tagline */
+  .tagline {
+    font-size: 22px;
+    color: #7fa8d0;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    margin-bottom: 32px;
+    max-width: 700px;
+    line-height: 1.5;
+  }
+  .tagline strong {
+    color: #a8c8f0;
+    font-weight: 600;
+  }
+
+  /* Stat pills row */
+  .stats {
+    display: flex;
+    gap: 20px;
+    flex-wrap: nowrap;
+  }
+  .stat {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 8px;
+    padding: 14px 22px;
+    min-width: 140px;
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 1.1;
+  }
+  .stat-value span {
+    color: #3b82d4;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: #5a7a9a;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-top: 3px;
+  }
+
+  /* Tech stack strip at bottom */
+  .tech-strip {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 44px;
+    background: rgba(255,255,255,0.025);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    padding: 0 100px;
+    gap: 36px;
+    z-index: 10;
+  }
+  .tech-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: #3a4f6a;
+    margin-right: 4px;
+  }
+  .tech-tag {
+    font-size: 11px;
+    font-weight: 500;
+    color: #4a6a8a;
+    letter-spacing: 0.04em;
+    padding: 2px 10px;
+    background: rgba(59,130,212,0.07);
+    border: 1px solid rgba(59,130,212,0.14);
+    border-radius: 3px;
+  }
+
+  /* Challenge label top-right */
+  .challenge-tag {
+    position: absolute;
+    top: 32px;
+    right: 100px;
+    z-index: 10;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #5080b0;
+    border: 1px solid rgba(59,130,212,0.25);
+    padding: 6px 16px;
+    border-radius: 3px;
+    background: rgba(10,20,50,0.5);
+  }
+
+  /* Vertical divider line */
+  .vline {
+    position: absolute;
+    left: 94px;
+    top: 80px;
+    bottom: 80px;
+    width: 2px;
+    background: linear-gradient(to bottom, transparent, rgba(59,130,212,0.5) 20%, rgba(59,130,212,0.5) 80%, transparent);
+  }
+
+  /* Signal pulse line across the banner */
+  .signal-line {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(to right, transparent 5%, rgba(59,130,212,0.07) 20%, rgba(59,130,212,0.15) 50%, rgba(59,130,212,0.07) 80%, transparent 95%);
+    z-index: 1;
+  }
+
+  /* Horizontal tick marks suggesting telemetry timeline */
+  .timeline-ticks {
+    position: absolute;
+    bottom: 50px;
+    left: 100px;
+    right: 400px;
+    height: 2px;
+    background: rgba(59,130,212,0.06);
+    z-index: 2;
+  }
+
+  /* Grid dots overlay for depth */
+  .grid-overlay {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(50,90,140,0.12) 1px, transparent 1px);
+    background-size: 60px 60px;
+    z-index: 0;
+  }
+</style>
+</head>
+<body>
+<div class="banner">
+  
+  <div class="grid-overlay"></div>
+  <div class="stars"></div>
+  <div class="nebula-left"></div>
+  <div class="nebula-right"></div>
+  <div class="signal-line"></div>
+
+  
+  <div class="challenge-tag">AI Builders Challenge 2026</div>
+
+  
+  <div class="orbit-ring-3"></div>
+  <div class="orbit-ring-2"></div>
+  <div class="orbit-ring"></div>
+  <div class="planet">
+    <div class="planet-shimmer"></div>
+    <div class="planet-shimmer-2"></div>
+  </div>
+  <div class="sat-dot"></div>
+
+  
+  <div class="vline"></div>
+
+  
+  <div class="content">
+    <div class="ibm-badge">
+      <div class="ibm-badge-dot"></div>
+      <span class="ibm-badge-text">IBM watsonx.ai  ·  Granite-4  ·  NASA PCoE Validated</span>
+    </div>
+
+    <div class="title">Mission<span class="title-accent">Mind</span></div>
+
+    <div class="tagline">
+      AI-powered spacecraft fault detection — <strong>7 seconds</strong> from onset to alert.<br />
+      Physics-gated ML + Granite RAG explanations. <strong>39 min</strong> warning before bus shutdown.
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-value">0.786<span> AUC</span></div>
+        <div class="stat-label">NASA PCoE B0005</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">7<span>s</span></div>
+        <div class="stat-label">Detection latency</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">25<span>×</span></div>
+        <div class="stat-label">Faster than threshold</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">0<span> FP</span></div>
+        <div class="stat-label">Eclipse false alarms</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">30<span> ✓</span></div>
+        <div class="stat-label">Test suites passing</div>
+      </div>
+    </div>
+  </div>
+
+  
+  <div class="tech-strip">
+    <span class="tech-label">Stack</span>
+    <span class="tech-tag">IBM Granite-4</span>
+    <span class="tech-tag">watsonx.ai</span>
+    <span class="tech-tag">Physics-Gated NN</span>
+    <span class="tech-tag">TF-IDF RAG</span>
+    <span class="tech-tag">Kepler Propagator</span>
+    <span class="tech-tag">React 19 + Vite</span>
+    <span class="tech-tag">Three.js 3D CAD</span>
+    <span class="tech-tag">FastAPI</span>
+    <span class="tech-tag">Streamlit</span>
+    <span class="tech-tag">MIT License</span>
+  </div>
+</div>
+
+<p style="text-align:center;margin-top:12px;font-size:11px;color:#3a4a5a;font-family:system-ui,sans-serif;border-top:1px solid #1a2030;padding-top:8px">Made with IBM Bob</p>
+</body>
+</html>

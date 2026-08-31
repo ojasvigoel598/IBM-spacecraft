@@ -377,7 +377,7 @@ radiator failure       FPR_strict 100-600s   = 0.000
                        post900_F1              ~ 1.00
 normal                 FPR_strict 100-600s   = 0.000
                        flag_rate 900-3600s    = 0.0004  (< 0.1 %, well within spec)
-Source:  missionmind/ml/detect.py + missionmind/_lifecycle_assertions.py
+Source:  missionmind/ml/detect.py + missionmind/tests/test_physics.py
 ```
 
 ### 4. Physics rule checks under load
