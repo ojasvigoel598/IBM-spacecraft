@@ -52,10 +52,31 @@ On real NASA battery data, the system achieves **AUC 0.786** validated across 6 
 
 ## Demo
 
-Watch the 2-minute narrated walkthrough: https://youtu.be/wg2fR0hICrs
+Watch the 2-minute narrated walkthrough: [YouTube](https://youtu.be/wg2fR0hICrs)
+
+<p align="center">
+  <a href="https://youtu.be/wg2fR0hICrs">
+    <img src="screenshots/overview.png" alt="MissionMind Dashboard" width="860" style="border-radius:8px;">
+  </a>
+  <br><em>Click the image to watch on YouTube</em>
+</p>
 
 <p align="center">
   <video controls width="860" style="border-radius:8px;" src="demo/final_demo.mp4"></video>
+</p>
+
+### Dashboard Screenshots
+
+<p align="center">
+  <img src="screenshots/overview.png" alt="Overview" width="420">
+  &nbsp;&nbsp;
+  <img src="screenshots/solar-failure.png" alt="Solar Failure Detection" width="420">
+</p>
+
+<p align="center">
+  <img src="screenshots/radiator-failure.png" alt="Radiator Failure" width="420">
+  &nbsp;&nbsp;
+  <img src="screenshots/rag-alert-citations.png" alt="RAG Alert with Citations" width="420">
 </p>
 
 ---
@@ -179,6 +200,12 @@ Independent rule engine that cross-checks the ML output:
 - SOC/UVLO policy (safe mode at 20%, bus trip at 0%)
 
 ### Digital Twin
+
+<p align="center">
+  <img src="screenshots/cad-normal.png" alt="Fusion 360 CAD — Assembled" width="420">
+  &nbsp;&nbsp;
+  <img src="screenshots/cad-exploded.png" alt="Fusion 360 CAD — Exploded View" width="420">
+</p>
 
 - Real Fusion 360 satellite CAD (OBJ / STL / STEP) — 42,878 vertices, 85,740 triangles
 - Three.js renders the CAD with part-level fault animation (solar arrays dim, main bus glows)
