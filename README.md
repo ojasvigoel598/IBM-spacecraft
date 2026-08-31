@@ -5,7 +5,7 @@
 **AI-powered spacecraft fault detection — 7 seconds from onset to alert.**
 
 [![IBM Bob Certificate](https://img.shields.io/badge/IBM%20Bob-Certificate-1F70C1.svg)](https://skills.yourlearning.ibm.com/certificate/share/99e8a93d06ewogICJvYmplY3RJZCIgOiAiQUxNLUNPVVJTRV80MDc2MzExIiwKICAibGVhcm5lckNOVU0iIDogIjg0NTM0MzFSRUciLAogICJvYmplY3RUeXBlIiA6ICJBQ1RJVklUWSIKfQ1ee785e3df-10)
-[![IBM Certificate 2](https://img.shields.io/badge/IBM-SkillsBuild%20Certificate%202-1F70C1.svg)](https://skills.yourlearning.ibm.com/certificate/share/3dfa573d92ewogICJvYmplY3RUeXBlIiA6ICJBQ1RJVklUWSIsCiAgImxlYXJuZXJDTlVNIiA6ICI4NDUzNDMxUkVHIiwKICAib2JqZWN0SWQiIDogIkFMTS1DT1VSU0VfNDA3NjMxMSIKfQ2778ae28b9-10)
+[![IBM Certificate](https://img.shields.io/badge/IBM-SkillsBuild%20Certificate-1F70C1.svg)](https://skills.yourlearning.ibm.com/certificate/share/3dfa573d92ewogICJvYmplY3RUeXBlIiA6ICJBQ1RJVklUWSIsCiAgImxlYXJuZXJDTlVNIiA6ICI4NDUzNDMxUkVHIiwKICAib2JqZWN0SWQiIDogIkFMTS1DT1VSU0VfNDA3NjMxMSIKfQ2778ae28b9-10)
 [![IBM](https://img.shields.io/badge/IBM-watsonx.ai%20Granite-1F70C1.svg)]()
 [![NASA](https://img.shields.io/badge/NASA%20PCoE-B0005%20Validated-orange.svg)]()
 [![Tests](https://img.shields.io/badge/tests-30%20suites%20PASS-brightgreen.svg)]()
@@ -13,7 +13,21 @@
 
 </div>
 
-MissionMind is a spacecraft **digital twin** that detects faults **25× faster** than threshold alarms and explains every diagnosis with engineering evidence. On real NASA battery data (B0005), the physics-gated ML ensemble achieves **AUC 0.786 ± 0.009** — validated across 6 seeds with zero cherry-picking. A **4-line causal alert** gives operators the subsystem, the evidence, and the action in a single scannable card.
+Spacecraft faults happen at 3 AM. The operator has minutes to decide. MissionMind gives them the answer in seven seconds.
+
+MissionMind is a spacecraft digital twin that couples a physics simulator, an ML anomaly detector, and an IBM Granite-powered explanation layer. On real NASA battery data, it achieves **AUC 0.786** — validated across 6 seeds. Every anomaly produces a 4-line causal alert: the subsystem, the evidence, and the action.
+
+---
+
+## How It Works
+
+1. **Simulate.** A physics engine generates one hour of power and thermal telemetry from a virtual satellite.
+2. **Propagate.** A Kepler propagator calculates where the satellite is in orbit and whether it is in sunlight or eclipse.
+3. **Detect.** An ensemble of unsupervised ML models (Isolation Forest, LOF, OC-SVM, and more) scores every sample for anomalies.
+4. **Validate.** Physics rules check whether the anomaly is real or just an eclipse shadow — false alarms drop to zero.
+5. **Retrieve.** A RAG retriever pulls relevant engineering documents from a curated knowledge base.
+6. **Explain.** IBM Granite on watsonx.ai formats the diagnosis, evidence, and recommended action as structured JSON.
+7. **Display.** The operator sees a 4-line alert card, a countdown of remaining useful life, and a 3D view of the satellite.
 
 ---
 
@@ -27,18 +41,24 @@ Watch the 2-minute narrated walkthrough: https://youtu.be/wg2fR0hICrs
 
 ---
 
-## Try It Now (No Vercel Needed)
+## Try It Locally
 
-Clone and run locally in 4 commands:
+No API keys required. The dashboard works immediately.
 
 ```bash
 git clone https://github.com/ojasvigoel598/IBM-spacecraft.git && cd IBM-spacecraft
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-streamlit run missionmind/viz/app.py                 # dashboard at localhost:8501
+streamlit run missionmind/viz/app.py                 # opens at localhost:8501
 ```
 
-The dashboard works immediately — no API keys needed. Training and telemetry generate automatically on first run.
+To enable real IBM Granite explanations, add your watsonx.ai credentials:
+
+```bash
+cp .env.example .env
+# fill in WATSONX_APIKEY and WATSONX_PROJECT_ID
+python -m missionmind.ai.granite_client --check      # verifies the connection
+```
 
 ---
 
@@ -82,75 +102,244 @@ The dashboard works immediately — no API keys needed. Training and telemetry g
 
 ---
 
-## Key Results
+## Results
 
 | Metric | Value |
 |---|---|
-| **Detection latency** | **7 seconds** after fault onset |
-| **Warning before shutdown** | **39 minutes** (vs 36 min threshold) |
-| **False positives (eclipse)** | **0** — Kepler geometry suppresses shadow passes |
-| **NASA PCoE AUC** | **0.786 ± 0.009** (6-seed, B0005 battery) |
-| **Test suites** | **30 / 30 passing** |
+| Detection latency | **7 seconds** after fault onset |
+| Warning before shutdown | **39 minutes** (vs 36 min with threshold alarms only) |
+| False positives during eclipse | **0** — Kepler geometry suppresses shadow passes |
+| NASA PCoE AUC | **0.786 ± 0.009** (6-seed robust, B0005 battery) |
+| Test suites | **30 / 30 passing** |
+
+**Before MissionMind:** solar-array degradation triggers threshold alarms ~3 minutes after onset, giving ~36 minutes of warning.
+
+**After MissionMind:** the ML ensemble detects within 7 seconds, providing 39 minutes of advance warning — 3 extra minutes that matter when protecting a $100M satellite.
 
 ---
 
-## What's Inside
+## Technical Details
 
-| Component | Detail |
+### Physics Simulator
+
+- Coupled power + thermal ODE solver (Euler integration, RK4 extension point)
+- Kepler propagator with conical shadow eclipse model (umbra / penumbra / sun-exposure factor)
+- Reaction-wheel micro-vibration model (McMullan power-law disturbance, Arrhenius-Coffin-Manson battery fade)
+- Configurable fault injection: solar degradation, radiator degradation
+- Physics constants toggleable between spec-faithful and demo-tuned via `MISSIONMIND_PHYSICS_SPEC`
+
+### ML Ensemble
+
+Seven unsupervised detectors trained on normal-only data (contamination 0.05):
+
+| Detector | Type |
 |---|---|
-| **Physics Simulator** | Coupled power + thermal ODE, Kepler propagator with eclipse geometry, reaction-wheel micro-vibration model |
-| **ML Ensemble** | Isolation Forest, LOF, OC-SVM, MLP-AE, Hybrid DIF, FCNN, XGBOD — unsupervised, contamination 0.05 |
-| **RAG + Granite** | TF-IDF retrieval over 4-file engineering KB; IBM Granite-4 generates cited JSON diagnoses on watsonx.ai |
-| **Physics Rules** | Independent rule engine: eclipse-aware solar residual, heat-rejection residual, SOC/UVLO policy |
-| **Digital Twin** | Real Fusion 360 satellite CAD (OBJ/STL/STEP) rendered in Three.js with part-level fault animation; coupled EPS + thermal + orbital physics |
-| **NASA Validation** | Arm-D protocol on B0005/B0006/B0007/B0018; proven PINN non-result documented with evidence |
+| Isolation Forest | Tree-based anomaly scoring |
+| Local Outlier Factor | Density-based |
+| One-Class SVM | Boundary-based |
+| MLP Autoencoder | Reconstruction error |
+| Hybrid Deep Isolation Forest | Deep feature + IF |
+| FCNN | Supervised feed-forward |
+| XGBOD | Extreme boosting outlier |
+
+The ensemble uses OR-logic: any detector flags → anomaly. Score = MIN of three sub-detectors (full, power, thermal).
+
+### RAG + Granite
+
+- TF-IDF retrieval over 4 curated engineering documents (power subsystem, thermal subsystem, mission rules, telemetry reference)
+- Metadata-scoped: queries are scoped to the relevant subsystems
+- IBM Granite-4 (`ibm/granite-4-h-small`) on watsonx.ai generates cited JSON diagnoses
+- Deterministic mock fallback when API key is absent — the UI always shows which mode is active
+
+### Physics Rules
+
+Independent rule engine that cross-checks the ML output:
+
+- Eclipse-aware solar residual (measured vs expected solar during orbital shadow)
+- Heat-rejection residual (thermal model vs observed temperature)
+- SOC/UVLO policy (safe mode at 20%, bus trip at 0%)
+
+### Digital Twin
+
+- Real Fusion 360 satellite CAD (OBJ / STL / STEP) — 42,878 vertices, 85,740 triangles
+- Three.js renders the CAD with part-level fault animation (solar arrays dim, main bus glows)
+- Live telemetry ingest via virtual ESP32-class edge node (JSON-lines TCP / MQTT)
+- Bidirectional: `send_command()` supports reset, rate change, fault injection
+
+### PINN vs PGNN Finding
+
+The repo includes a strict physics-informed neural network (PINN) benchmarked against the feature-only PGNN on real NASA B0005 data:
+
+```
+PGNN (feature-only physics gate)    AUC 0.789   |Spearman| 0.939
+strict PINN (Raissi 2019)           AUC 0.349   |Spearman| 0.227
+```
+
+The PINN's composite loss collapses discrimination once the network fits the ODE. The production model keeps physics as a gate, not a loss term.
 
 ---
 
-## CAD Assets
+## Repository Structure
 
-<p align="center">
-  <img src="screenshots/cad-normal.png" alt="IBM Satellite CAD — Fusion 360 assembled view" width="500" style="border-radius: 8px;">
-  <br><em>Assembled satellite — Fusion 360 CAD</em>
-</p>
-
-<p align="center">
-  <img src="screenshots/cad-exploded.png" alt="IBM Satellite CAD — Fusion 360 exploded view" width="500" style="border-radius: 8px;">
-  <br><em>Exploded view — solar panels, body, antenna separated</em>
-</p>
-
-The 3D satellite is a real [Fusion 360](https://www.autodesk.com/products/fusion-360/) export — not a procedural placeholder. All three exchange formats ship in the repo:
-
-| Format | File | Details |
-|---|---|---|
-| **OBJ** | [`ibm_satellite.obj`](missionmind/viz/components/models/ibm_satellite.obj) | 42,878 vertices · 85,740 triangles — the mesh Three.js renders |
-| **STL** | [`ibm_satellite.stl`](missionmind/viz/components/models/ibm_satellite.stl) | Binary STL; GitHub renders it inline (click to orbit/zoom) |
-| **STEP** | [`ibm_satellite.step`](missionmind/viz/components/models/ibm_satellite.step) | AP203 faceted BRep; opens in Fusion / SolidWorks / FreeCAD |
-
-> Generated from OBJ via `obj_to_step_stl.py` (gmsh mesh kernel + ISO-10303-21 writer). The Three.js viewer performs part-level fault animation: solar arrays dim on PV failure, main bus glows on radiator failure.
+```
+IBM-spacecraft/
+├── README.md
+├── requirements.txt                  # Python dependencies
+├── pytest.ini                        # Test configuration
+├── vercel.json                       # Vercel deploy config
+├── package.json                      # Root (Vercel build)
+├── MissionMind_Full_ML_Analysis.ipynb  # Jupyter notebook
+├── demo/
+│   ├── final_demo.mp4                # 2-minute narrated walkthrough
+│   └── frames/                       # Demo frame screenshots
+│
+├── missionmind/
+│   ├── simulator/                    # Physics engine
+│   │   ├── config.py                 # Central constants + DEMO/SPEC toggle
+│   │   ├── power.py                  # EPS: dSOC/dt, battery policy
+│   │   ├── thermal.py                # dT/dt = (Q_in - Q_out) / mc_p
+│   │   ├── failures.py               # Fault injection ramps
+│   │   ├── orbital.py                # Eclipse geometry
+│   │   ├── propagation.py            # Kepler + RK4 + DOPRI5 + J2
+│   │   ├── vibration.py              # Reaction-wheel micro-vibration
+│   │   └── run_scenarios.py          # Generates 3 CSV scenarios
+│   │
+│   ├── ml/                           # Detector zoo + training
+│   │   ├── train.py                  # Ensemble training → .joblib files
+│   │   ├── detect.py                 # score_dataframe(): UNSUP + ENSEMBLE
+│   │   ├── advanced_models.py        # IF / LOF / OC-SVM / MLP-AE / DIF / FCNN / XGBOD
+│   │   ├── metrics.py                # 9 evaluation metrics
+│   │   ├── prognostics.py            # NASA RUL on real .mat files
+│   │   ├── pinn_vs_pgnn.py           # Head-to-head PINN vs PGNN
+│   │   ├── pinn_torch.py             # PyTorch-autograd PINN twin
+│   │   ├── compare.py                # Threshold-independent metrics
+│   │   └── causal_narrative.py       # 4-line alert generation
+│   │
+│   ├── ai/                           # IBM Granite + RAG
+│   │   ├── granite_client.py         # watsonx.ai SDK + mock fallback
+│   │   ├── rag.py                    # TF-IDF retriever over 4-file KB
+│   │   ├── prompts.py                # System / RAG / Evidence prompts
+│   │   ├── rag_eval.py               # Golden dataset evaluation
+│   │   ├── rag_validation.py         # 10-consecutive-clean-runs gate
+│   │   └── knowledge_base/           # Engineering documents
+│   │       ├── power_subsystem.md
+│   │       ├── thermal_subsystem.md
+│   │       ├── mission_rules.md
+│   │       └── telemetry_reference.md
+│   │
+│   ├── physics_rules/                # Spec rule checks
+│   │   ├── rules.py                  # check_power / check_thermal
+│   │   └── test_rules.py
+│   │
+│   ├── telemetry/                    # Live ingest layer
+│   │   ├── edge_node.py              # Virtual ESP32 device
+│   │   ├── ingest.py                 # TCP/MQTT server + LiveScorer
+│   │   ├── frame.py                  # Wire schema
+│   │   └── run_edge_demo.py          # CLI demo
+│   │
+│   ├── auth/                         # Multi-user authentication
+│   │   ├── service.py                # Signup / verify / login / reset
+│   │   ├── security.py               # PBKDF2-HMAC-SHA256
+│   │   ├── api.py                    # Auth endpoints + rate limiting
+│   │   ├── db.py                     # SQLite user/session/token store
+│   │   └── ratelimit.py              # Per-IP / per-email limits
+│   │
+│   ├── viz/                          # Dashboards
+│   │   ├── app.py                    # Streamlit + Three.js dashboard
+│   │   ├── api_server.py             # FastAPI JSON API
+│   │   └── components/
+│   │       ├── satellite_geometry.py # trimesh CAD loader
+│   │       ├── obj_to_geometry.py    # OBJ → Three.js geometry
+│   │       ├── obj_to_step_stl.py    # OBJ → STEP + STL export
+│   │       └── models/               # Real IBM satellite CAD
+│   │           ├── ibm_satellite.obj
+│   │           ├── ibm_satellite.stl
+│   │           └── ibm_satellite.step
+│   │
+│   ├── tests/                        # 30 test suites
+│   │   ├── test_physics.py           # SOC plateau, voltage, temperature
+│   │   ├── test_ml_metrics.py        # Predictive horizon, fresh capacity
+│   │   ├── test_auth.py              # 31 auth tests (brute-force, injection)
+│   │   ├── test_granite_nominal.py   # Mock vs real Granite modes
+│   │   ├── test_rag_retrieval.py     # Recall@k, MRR, nDCG
+│   │   ├── test_pinn_raissi.py       # PINN vs PGNN on B0005
+│   │   └── ...                       # 24 more suites
+│   │
+│   └── models/                       # Trained inference artifacts
+│       ├── iforest.joblib            # Isolation Forest
+│       ├── iforest_power.joblib      # Power sub-detector
+│       ├── iforest_thermal.joblib    # Thermal sub-detector
+│       ├── scaler.joblib             # Feature scaler
+│       ├── pinn_vs_pgnn_b0005.json   # Head-to-head result
+│       └── ...                       # Audit matrices, rankings
+│
+├── web/                              # React mission-control console
+│   ├── src/
+│   │   ├── App.tsx                   # KPI grid, charts, scrubber
+│   │   ├── auth.tsx                  # Auth context
+│   │   └── components/
+│   │       ├── auth/AuthScreen.tsx   # Login / signup / verify
+│   │       └── ui/                   # shadcn/ui components
+│   ├── vite.config.ts
+│   └── package.json
+│
+├── api/                              # Vercel serverless function
+│   ├── index.py                      # FastAPI on Vercel
+│   └── requirements.txt
+│
+├── screenshots/
+│   ├── overview.png
+│   ├── cad-normal.png                # Fusion 360 assembled view
+│   ├── cad-exploded.png              # Fusion 360 exploded view
+│   └── ...
+│
+└── .github/
+    └── workflows/ci.yml              # GitHub Actions CI
+```
 
 ---
 
-## How IBM Bob Was Used
+## IBM Technologies
 
-IBM Bob (via Codebuff) was the primary development tool throughout the project:
-
-| Module | Bob's Role |
+| Technology | Usage |
 |---|---|
-| `simulator/power.py` | Generated the power ODE loop + sanity asserts from the spec constants |
-| `simulator/thermal.py` | Scaffolded the thermal model from Section 4 spec; flagged equilibrium tensions |
-| `simulator/failures.py` + `run_scenarios.py` | Generated failure injection ramps + 3 CSV outputs |
-| `physics_rules/rules.py` | Wrote slope helpers + rule checks; spec thresholds encoded verbatim |
-| `ml/train.py` + `detect.py` | Generated IsolationForest+scaler pipeline; enforced training only on normal |
-| `ai/granite_client.py` | Fetched current watsonx.ai SDK docs; implemented mock fallback for offline demo |
+| **IBM Granite-4** (`ibm/granite-4-h-small`) | Generates cited JSON fault diagnoses on watsonx.ai |
+| **watsonx.ai SDK** | Real API integration with honest mock fallback |
+| **IBM Bob** (Codebuff) | Primary development tool — see below |
+
+### How IBM Bob Was Used
+
+| Module | What Bob Did |
+|---|---|
+| `simulator/power.py` | Generated the power ODE loop and sanity asserts from the spec constants |
+| `simulator/thermal.py` | Scaffolded the thermal model from the spec; flagged equilibrium tensions |
+| `simulator/failures.py` + `run_scenarios.py` | Generated failure injection ramps and 3 CSV outputs |
+| `physics_rules/rules.py` | Wrote slope helpers and rule checks; spec thresholds encoded verbatim |
+| `ml/train.py` + `detect.py` | Generated the IsolationForest + scaler pipeline; enforced training on normal data only |
+| `ai/granite_client.py` | Fetched current watsonx.ai SDK docs; implemented the mock fallback for offline demo |
 | `viz/app.py` | Generated Streamlit scaffolding; upgraded to production Three.js with PBR materials |
-| `tests/test_auth.py` | Assisted with the 31-test auth regression suite covering brute-force, injection, token replay |
-| Vercel deploy | Debugged 10+ build failures, identified Node version incompatibility, fixed output directory resolution |
-| README + docs | Rewrote submission docs, generated banner images, captured CAD renders from STL |
+| `tests/test_auth.py` | Assisted with the 31-test auth regression suite (brute-force, injection, token replay) |
+| Vercel deploy | Debugged 10+ build failures; identified Node version incompatibility; fixed output directory resolution |
+| README + docs | Rewrote submission docs; generated banner images; captured CAD renders from STL |
 
-Every plan you gave — build, cross-check, test — was executed by IBM Bob. The certificate below confirms completion:
+Every plan you gave — build, cross-check, test — was executed by Bob.
 
 [![IBM Bob Certificate](https://img.shields.io/badge/IBM%20Bob-Certificate-1F70C1.svg)](https://skills.yourlearning.ibm.com/certificate/share/99e8a93d06ewogICJvYmplY3RJZCIgOiAiQUxNLUNPVVJTRV80MDc2MzExIiwKICAibGVhcm5lckNOVU0iIDogIjg0NTM0MzFSRUciLAogICJvYmplY3RUeXBlIiA6ICJBQ1RJVklUWSIKfQ1ee785e3df-10)
+
+---
+
+## Limitations
+
+- **Simulated telemetry.** The physics engine generates realistic data, but a real spacecraft would provide the ground truth.
+- **No Kalman filter.** Model state is not corrected via data assimilation — a real digital twin would close this loop.
+- **Single spacecraft.** No fleet learning across multiple satellites.
+- **Granite is optional.** The ML + physics pipeline works entirely without an LLM. Granite adds human-readable explanations, not detection capability.
+
+---
+
+## License
+
+MIT. See [LICENSE.md](LICENSE.md).
 
 ---
 
