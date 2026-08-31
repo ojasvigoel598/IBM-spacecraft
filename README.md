@@ -43,14 +43,6 @@ Thirty seconds of the dashboard: scrubbing the mission clock through a solar-arr
   <img src="demo.gif" alt="MissionMind dashboard scrubbing a 1-hour solar-failure mission" width="860">
 </p>
 
-Captured live from the running app. `demo.gif` regenerates from `streamlit run missionmind/viz/app.py` using the Mission Time Transport bar. The narrated MP4 regenerates with:
-
-```bash
-python scripts/capture_bright_frames.py     # live frames from the running dashboard (Playwright + system Chrome)
-python scripts/brighten_frames.py           # post-process for video visibility
-python scripts/build_demo_v2.py            # edge-tts narration + moviepy assembly -> demo/missionmind_demo.mp4
-```
-
 ---
 
 ## What's in it
@@ -103,11 +95,8 @@ cd web && npm install && npm run dev -- --port 5173            # console at http
 # returned in responses ONLY outside production (MISSIONMIND_ENV=production
 # never returns them).
 
-# 6. install the git pre-commit hook (blocks wrong author, secrets, or runtime files)
-bash scripts/install-hooks.sh
-
-# 7. verify the environment and run the tests (CI runs the same checks on every push)
-python -m missionmind.check_environment && python -m pytest missionmind/tests/ -q
+# 6. verify the environment and run the tests (CI runs the same checks on every push)
+python -m pytest missionmind/tests/ -q
 
 # 8. run the Jupyter notebook (full ML analysis, ~15-25 min)
 jupyter lab                                          # opens JupyterLab
@@ -160,11 +149,7 @@ The Streamlit dashboard is a Python server app and does not run on Vercel;
 use it locally (`streamlit run missionmind/viz/app.py`) or on Streamlit
 Community Cloud.
 
-**Detailed deploy guide:** [`missionmind/docs/VERCEL_DEPLOY.md`](missionmind/docs/VERCEL_DEPLOY.md)
-
 ### Security
-
-Full details: [`missionmind/docs/SECURITY.md`](missionmind/docs/SECURITY.md).
 
 - **Real multi-user authentication** on the FastAPI backend (`missionmind/auth/`):
   signup → email verification → login → logout, plus password reset. Passwords
@@ -240,7 +225,7 @@ One telemetry sample through the whole stack:
 
 ## Digital Twin Status (Grieves/NASA definitions)
 
-MissionMind maps to the formal digital twin definitions from NASA (Shafto et al. 2012) and Grieves (2002/2017). See [DIGITAL_TWIN_ARCHITECTURE.md](missionmind/docs/DIGITAL_TWIN_ARCHITECTURE.md) for the full 50-source research analysis.
+MissionMind maps to the formal digital twin definitions from NASA (Shafto et al. 2012) and Grieves (2002/2017).
 
 | Grieves Element | Status | Implementation |
 |---|---|---|
@@ -458,9 +443,7 @@ no network): a golden dataset of 18 typed engineering questions measures
 Recall@k / Precision@k / MRR / nDCG, adversarial attacks (wrong-document,
 conflicting sources, prompt injection, unit confusion) are defended, and the
 full RAG suite must pass **10 consecutive clean runs**
-(`python -m missionmind.ai.rag_validation --runs 10`). Full methodology,
-measured scores and honest limitations:
-[`missionmind/docs/RAG_EVALUATION.md`](missionmind/docs/RAG_EVALUATION.md).
+(`python -m missionmind.ai.rag_validation --runs 10`).
 
 ---
 
@@ -473,7 +456,7 @@ Implemented:
 - **Fault injection**: solar degradation ramps `P_solar_max -> 0.48x` over `t = 600 -> 900 s`; radiator degradation ramps `e*A -> r_final * nominal`.
 - **Real IBM satellite CAD** (`satellite_geometry.js`): part-level fault animation, solar arrays dim + pulse on PV failure, main bus glows on radiator failure.
 - **Detector / physics-rule co-design**: every flagged row is visible in the alert card with the exact feature column that drove the flag.
-- **Real orbital physics**: analytical two-body propagation (Kepler's equation solved by Newton-Raphson) in 3D ECI coordinates, a conical shadow eclipse model (umbra / penumbra / sun-exposure factor), and a validated numerical extension point (`simulator/propagation.py`: RK4 + adaptive DOPRI5 + J2). The Three.js orbit view and HUD angle are driven by the propagated state, and the eclipse state is consumed by the physics rules. Method evaluation and measurements in `missionmind/docs/ORBITAL_PROPAGATION.md`.
+- **Real orbital physics**: analytical two-body propagation (Kepler's equation solved by Newton-Raphson) in 3D ECI coordinates, a conical shadow eclipse model (umbra / penumbra / sun-exposure factor), and a validated numerical extension point (`simulator/propagation.py`: RK4 + adaptive DOPRI5 + J2). The Three.js orbit view and HUD angle are driven by the propagated state, and the eclipse state is consumed by the physics rules.
 
 Not implemented:
 
@@ -579,7 +562,7 @@ Fresh-checkout behaviour:
   in `missionmind/data/real_nasa/`; with the data downloaded they run in
   full. Download the official NASA BatteryAgingARC-FY08Q4 files with
   `python -m missionmind.ml.download_nasa_data` (stdlib-only and
-  idempotent; see `missionmind/docs/NASA_REAL_VALIDATION.md`).
+  idempotent).
 - CI runs the same gate and suite inside a fresh venv on every push. It
   downloads and caches the NASA `.mat` files (via `actions/cache`, keyed
   on the download script), so the real-data tests execute rather than
@@ -609,7 +592,7 @@ Fresh-checkout behaviour:
 
 ## Technology Stack Decisions
 
-This project intentionally uses a **minimal technology stack** that provides the strongest measurable engineering capability. Full analysis: [`missionmind/docs/TECHNOLOGY_STACK_REVIEW.md`](missionmind/docs/TECHNOLOGY_STACK_REVIEW.md).
+This project intentionally uses a **minimal technology stack** that provides the strongest measurable engineering capability.
 
 | Technology | Decision | Reason |
 |---|---|---|
@@ -653,7 +636,7 @@ To enable real Granite calls:
 3. Generate an API key → add to `.env`
 4. Run `python -m missionmind.ai.granite_client --check`
 
-See `missionmind/docs/IBM_CLOUD_SETUP.md` for the full walkthrough.
+See the [IBM watsonx.ai docs](https://cloud.ibm.com/docs/watsonxat) for account setup.
 
 ---
 
@@ -663,9 +646,9 @@ See `missionmind/docs/IBM_CLOUD_SETUP.md` for the full walkthrough.
 - Ensemble coherence under inspector (flag=1 implies score<0 by construction)
 - 4-line causal narrative (WARN -> SUBSYSTEM -> EVIDENCE -> ACTION)
 - Granite client + RAG integrated with honest mock fallback
-- Real Kepler propagator: analytical two-body + conical shadow eclipse in the runtime telemetry; the eclipse state is coupled into the power/battery/thermal solve (one source of truth drives orbital telemetry, solar power, battery and the rules layer), with a validated numerical extension point (RK4 / adaptive DOPRI5 / J2) for perturbed runs (see `missionmind/docs/ORBITAL_PROPAGATION.md`)
+- Real Kepler propagator: analytical two-body + conical shadow eclipse in the runtime telemetry; the eclipse state is coupled into the power/battery/thermal solve (one source of truth drives orbital telemetry, solar power, battery and the rules layer), with a validated numerical extension point (RK4 / adaptive DOPRI5 / J2) for perturbed runs
 - Live telemetry ingest: virtual IoT edge node -> TCP/MQTT -> live ensemble scoring (`missionmind/telemetry/`)
-- Session persistence: dashboard resumes at last-viewed scenario/time after restart, plus login auto-start (`scripts/install_autostart.ps1`)
+- Session persistence: dashboard resumes at last-viewed scenario/time after restart
 - PINN vs PGNN result disclosed on disk and in this README
 
 ---
@@ -677,7 +660,7 @@ PRs welcome. The two highest-leverage follow-ups:
 1. Higher-fidelity perturbed propagation in the runtime solve (J2/drag are validated in `simulator/propagation.py` but the live telemetry still uses the analytical two-body baseline).
 2. Physical edge hardware: an ESP32/RPi running the same JSON-lines wire format the virtual node publishes, replacing `VirtualEdgeNode` in `run_edge_demo.py`.
 
-Both are tracked in `CHANGES.md` with risk / impact / effort annotations.
+Both are tracked in the issue tracker with risk / impact / effort annotations.
 
 ## License
 
