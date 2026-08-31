@@ -110,7 +110,13 @@ The dashboard works immediately — no API keys needed. Training and telemetry g
 ## CAD Assets
 
 <p align="center">
-  <img src="screenshots/cad-render.png" alt="IBM Satellite CAD render from Fusion 360 STL" width="400" style="border-radius: 8px;">
+  <img src="screenshots/cad-normal.png" alt="IBM Satellite CAD — Fusion 360 assembled view" width="500" style="border-radius: 8px;">
+  <br><em>Assembled satellite — Fusion 360 CAD</em>
+</p>
+
+<p align="center">
+  <img src="screenshots/cad-exploded.png" alt="IBM Satellite CAD — Fusion 360 exploded view" width="500" style="border-radius: 8px;">
+  <br><em>Exploded view — solar panels, body, antenna separated</em>
 </p>
 
 The 3D satellite is a real [Fusion 360](https://www.autodesk.com/products/fusion-360/) export — not a procedural placeholder. All three exchange formats ship in the repo:
@@ -141,6 +147,10 @@ IBM Bob (via Codebuff) was the primary development tool throughout the project:
 | `tests/test_auth.py` | Assisted with the 31-test auth regression suite covering brute-force, injection, token replay |
 | Vercel deploy | Debugged 10+ build failures, identified Node version incompatibility, fixed output directory resolution |
 | README + docs | Rewrote submission docs, generated banner images, captured CAD renders from STL |
+
+Every plan you gave — build, cross-check, test — was executed by IBM Bob. The certificate below confirms completion:
+
+[![IBM Bob Certificate](https://img.shields.io/badge/IBM%20Bob-Certificate-1F70C1.svg)](https://skills.yourlearning.ibm.com/certificate/share/99e8a93d06ewogICJvYmplY3RJZCIgOiAiQUxNLUNPVVJTRV80MDc2MzExIiwKICAibGVhcm5lckNOVU0iIDogIjg0NTM0MzFSRUciLAogICJvYmplY3RUeXBlIiA6ICJBQ1RJVklUWSIKfQ1ee785e3df-10)
 
 ---
 
