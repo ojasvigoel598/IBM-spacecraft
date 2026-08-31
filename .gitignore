@@ -67,3 +67,6 @@ htmlcov/
 
 # Banner export — local only, never committed
 bannerdownload/
+
+# Build output
+/dist/
