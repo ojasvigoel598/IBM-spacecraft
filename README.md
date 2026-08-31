@@ -12,7 +12,7 @@
 
 </div>
 
-MissionMind detects spacecraft faults **25× faster** than threshold alarms and explains every diagnosis with engineering evidence. On real NASA battery data (B0005), the physics-gated ML ensemble achieves **AUC 0.786 ± 0.009** — validated across 6 seeds with zero cherry-picking. A **4-line causal alert** gives operators the subsystem, the evidence, and the action in a single scannable card.
+MissionMind is a spacecraft **digital twin** that detects faults **25× faster** than threshold alarms and explains every diagnosis with engineering evidence. On real NASA battery data (B0005), the physics-gated ML ensemble achieves **AUC 0.786 ± 0.009** — validated across 6 seeds with zero cherry-picking. A **4-line causal alert** gives operators the subsystem, the evidence, and the action in a single scannable card.
 
 ---
 
@@ -65,7 +65,7 @@ MissionMind detects spacecraft faults **25× faster** than threshold alarms and 
                                │
               ┌────────────────▼────────────────┐
               │         Operator Dashboard       │
-              │  3D satellite view (Three.js)    │
+              │  Digital twin CAD (Three.js)      │
               │  4-line causal alert card        │
               │  RUL countdown chip              │
               │  Streamlit + React console       │
@@ -94,8 +94,22 @@ MissionMind detects spacecraft faults **25× faster** than threshold alarms and 
 | **ML Ensemble** | Isolation Forest, LOF, OC-SVM, MLP-AE, Hybrid DIF, FCNN, XGBOD — unsupervised, contamination 0.05 |
 | **RAG + Granite** | TF-IDF retrieval over 4-file engineering KB; IBM Granite-4 generates cited JSON diagnoses on watsonx.ai |
 | **Physics Rules** | Independent rule engine: eclipse-aware solar residual, heat-rejection residual, SOC/UVLO policy |
-| **Dashboard** | Real IBM satellite CAD in Three.js, Streamlit mission-control view, React console with auth |
+| **Digital Twin** | Real Fusion 360 satellite CAD (OBJ/STL/STEP) rendered in Three.js with part-level fault animation; coupled EPS + thermal + orbital physics
 | **NASA Validation** | Arm-D protocol on B0005/B0006/B0007/B0018; proven PINN non-result documented with evidence |
+
+---
+
+## CAD Assets
+
+The 3D satellite is a real [Fusion 360](https://www.autodesk.com/products/fusion-360/) export — not a procedural placeholder. All three exchange formats ship in the repo:
+
+| Format | File | Details |
+|---|---|---|
+| **OBJ** | [`ibm_satellite.obj`](missionmind/viz/components/models/ibm_satellite.obj) | 42,878 vertices · 85,740 triangles — the mesh Three.js renders |
+| **STL** | [`ibm_satellite.stl`](missionmind/viz/components/models/ibm_satellite.stl) | Binary STL; GitHub renders it inline (click to orbit/zoom) |
+| **STEP** | [`ibm_satellite.step`](missionmind/viz/components/models/ibm_satellite.step) | AP203 faceted BRep; opens in Fusion / SolidWorks / FreeCAD |
+
+> Generated from OBJ via `obj_to_step_stl.py` (gmsh mesh kernel + ISO-10303-21 writer). The Three.js viewer performs part-level fault animation: solar arrays dim on PV failure, main bus glows on radiator failure.
 
 ---
 
