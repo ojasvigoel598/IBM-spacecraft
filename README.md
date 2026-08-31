@@ -19,7 +19,7 @@ MissionMind is a spacecraft **digital twin** that detects faults **25× faster**
 ## Demo
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=YOUR_VIDEO_ID">
+  <a href="https://youtu.be/wg2fR0hICrs">
     <img src="screenshots/overview.png" alt="MissionMind Demo" width="860" style="border-radius:8px; box-shadow: 0 4px 20px rgba(0,0,0,0.4);">
   </a>
 </p>
