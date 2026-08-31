@@ -4,12 +4,12 @@
 
 **AI-powered spacecraft fault detection — 7 seconds from onset to alert.**
 
+[![IBM Certificate](https://img.shields.io/badge/IBM-SkillsBuild%20Certificate-1F70C1.svg)](https://skills.yourlearning.ibm.com/certificate/share/99e8a93d06ewogICJvYmplY3RJZCIgOiAiQUxNLUNPVVJTRV80MDc2MzExIiwKICAibGVhcm5lckNOVU0iIDogIjg0NTM0MzFSRUciLAogICJvYmplY3RUeXBlIiA6ICJBQ1RJVklUWSIKfQ1ee785e3df-10)
+[![IBM Certificate 2](https://img.shields.io/badge/IBM-SkillsBuild%20Certificate%202-1F70C1.svg)](https://skills.yourlearning.ibm.com/certificate/share/3dfa573d92ewogICJvYmplY3RUeXBlIiA6ICJBQ1RJVklUWSIsCiAgImxlYXJuZXJDTlVNIiA6ICI4NDUzNDMxUkVHIiwKICAib2JqZWN0SWQiIDogIkFMTS1DT1VSU0VfNDA3NjMxMSIKfQ2778ae28b9-10)
 [![IBM](https://img.shields.io/badge/IBM-watsonx.ai%20Granite-1F70C1.svg)]()
 [![NASA](https://img.shields.io/badge/NASA%20PCoE-B0005%20Validated-orange.svg)]()
 [![Tests](https://img.shields.io/badge/tests-30%20suites%20PASS-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
-[![IBM Certificate](https://img.shields.io/badge/IBM-SkillsBuild%20Certificate-1F70C1.svg)](https://skills.yourlearning.ibm.com/certificate/share/3dfa573d92ewogICJvYmplY3RUeXBlIiA6ICJBQ1RJVklUWSIsCiAgImxlYXJuZXJDTlVNIiA6ICI4NDUzNDMxUkVHIiwKICAib2JqZWN0SWQiIDogIkFMTS1DT1VSU0VfNDA3NjMxMSIKfQ2778ae28b9-10)
-[![IBM Certificate 2](https://img.shields.io/badge/IBM-SkillsBuild%20Certificate%202-1F70C1.svg)](https://skills.yourlearning.ibm.com/certificate/share/99e8a93d06ewogICJvYmplY3RJZCIgOiAiQUxNLUNPVVJTRV80MDc2MzExIiwKICAibGVhcm5lckNOVU0iIDogIjg0NTM0MzFSRUciLAogICJvYmplY3RUeXBlIiA6ICJBQ1RJVklUWSIKfQ1ee785e3df-10)
 
 </div>
 
@@ -19,19 +19,26 @@ MissionMind is a spacecraft **digital twin** that detects faults **25× faster**
 
 ## Demo
 
-<p align="center">
-  <a href="https://youtu.be/wg2fR0hICrs">
-    <img src="screenshots/overview.png" alt="MissionMind Demo" width="860" style="border-radius:8px; box-shadow: 0 4px 20px rgba(0,0,0,0.4);">
-  </a>
-</p>
-
-<p align="center">
-  <em>▶ Click to watch the 2-minute narrated demo — or play the embedded video below</em>
-</p>
+Watch the 2-minute narrated walkthrough: https://youtu.be/wg2fR0hICrs
 
 <p align="center">
   <video controls width="860" style="border-radius:8px;" src="demo/final_demo.mp4"></video>
 </p>
+
+---
+
+## Try It Now (No Vercel Needed)
+
+Clone and run locally in 4 commands:
+
+```bash
+git clone https://github.com/ojasvigoel598/IBM-spacecraft.git && cd IBM-spacecraft
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+streamlit run missionmind/viz/app.py                 # dashboard at localhost:8501
+```
+
+The dashboard works immediately — no API keys needed. Training and telemetry generate automatically on first run.
 
 ---
 
@@ -95,7 +102,7 @@ MissionMind is a spacecraft **digital twin** that detects faults **25× faster**
 | **ML Ensemble** | Isolation Forest, LOF, OC-SVM, MLP-AE, Hybrid DIF, FCNN, XGBOD — unsupervised, contamination 0.05 |
 | **RAG + Granite** | TF-IDF retrieval over 4-file engineering KB; IBM Granite-4 generates cited JSON diagnoses on watsonx.ai |
 | **Physics Rules** | Independent rule engine: eclipse-aware solar residual, heat-rejection residual, SOC/UVLO policy |
-| **Digital Twin** | Real Fusion 360 satellite CAD (OBJ/STL/STEP) rendered in Three.js with part-level fault animation; coupled EPS + thermal + orbital physics
+| **Digital Twin** | Real Fusion 360 satellite CAD (OBJ/STL/STEP) rendered in Three.js with part-level fault animation; coupled EPS + thermal + orbital physics |
 | **NASA Validation** | Arm-D protocol on B0005/B0006/B0007/B0018; proven PINN non-result documented with evidence |
 
 ---
@@ -118,16 +125,22 @@ The 3D satellite is a real [Fusion 360](https://www.autodesk.com/products/fusion
 
 ---
 
-## Quick Start
+## How IBM Bob Was Used
 
-```bash
-git clone https://github.com/ojasvigoel598/IBM-spacecraft.git && cd IBM-spacecraft
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python -m missionmind.simulator.run_scenarios        # generate telemetry
-python -m missionmind.ml.train                       # train ensemble
-streamlit run missionmind/viz/app.py                 # dashboard at localhost:8501
-```
+IBM Bob (via Codebuff) was the primary development tool throughout the project:
+
+| Module | Bob's Role |
+|---|---|
+| `simulator/power.py` | Generated the power ODE loop + sanity asserts from the spec constants |
+| `simulator/thermal.py` | Scaffolded the thermal model from Section 4 spec; flagged equilibrium tensions |
+| `simulator/failures.py` + `run_scenarios.py` | Generated failure injection ramps + 3 CSV outputs |
+| `physics_rules/rules.py` | Wrote slope helpers + rule checks; spec thresholds encoded verbatim |
+| `ml/train.py` + `detect.py` | Generated IsolationForest+scaler pipeline; enforced training only on normal |
+| `ai/granite_client.py` | Fetched current watsonx.ai SDK docs; implemented mock fallback for offline demo |
+| `viz/app.py` | Generated Streamlit scaffolding; upgraded to production Three.js with PBR materials |
+| `tests/test_auth.py` | Assisted with the 31-test auth regression suite covering brute-force, injection, token replay |
+| Vercel deploy | Debugged 10+ build failures, identified Node version incompatibility, fixed output directory resolution |
+| README + docs | Rewrote submission docs, generated banner images, captured CAD renders from STL |
 
 ---
 
