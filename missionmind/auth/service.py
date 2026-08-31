@@ -290,11 +290,23 @@ def reset_password(token: str, new_password: str) -> dict:
 def bootstrap_admin() -> None:
     """Create the bootstrap admin from MISSIONMIND_ADMIN_EMAIL /
     MISSIONMIND_ADMIN_PASSWORD when both are set and the account does not
-    exist. No-op otherwise. The account is created email-verified."""
+    exist. No-op otherwise. The account is created email-verified.
+
+    In non-production mode, if no admin env vars are set, a default dev
+    account is created automatically so the demo works without email
+    infrastructure (Vercel, local dev, hackathon judges)."""
     email = os.getenv("MISSIONMIND_ADMIN_EMAIL", "").strip().lower()
     password = os.getenv("MISSIONMIND_ADMIN_PASSWORD", "")
+
+    # Default dev account when no admin env vars are set
     if not email or not password:
-        return
+        env = os.getenv("MISSIONMIND_ENV", "").strip().lower()
+        if env != "production":
+            email = "demo@missionmind.dev"
+            password = "demo1234"
+        else:
+            return
+
     if get_user_by_email(email) is not None:
         return
     try:
