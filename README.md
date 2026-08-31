@@ -15,7 +15,26 @@
 
 Spacecraft faults happen at 3 AM. The operator has minutes to decide. MissionMind gives them the answer in seven seconds.
 
-MissionMind is a spacecraft digital twin that couples a physics simulator, an ML anomaly detector, and an IBM Granite-powered explanation layer. On real NASA battery data, it achieves **AUC 0.786** — validated across 6 seeds. Every anomaly produces a 4-line causal alert: the subsystem, the evidence, and the action.
+---
+
+## The Problem
+
+- Spacecraft anomalies (solar array degradation, radiator failure) are caught by threshold alarms **3 minutes after onset** — too late to prevent cascading failures.
+- Eclipse shadows cause **false alarms every orbital pass**, training operators to ignore alerts.
+- Existing fault-detection systems flag anomalies but don't explain **why** or **what to do**.
+- A $100M satellite has ~39 minutes between first fault and bus shutdown. Every second counts.
+
+## The Solution
+
+MissionMind is a spacecraft digital twin that couples a physics simulator, an ML anomaly detector, and an IBM Granite-powered explanation layer.
+
+**Key features:**
+- **7-second detection** — ML ensemble detects faults within seconds of onset, 25× faster than threshold alarms.
+- **Zero false alarms during eclipse** — Kepler propagator predicts orbital shadows; normal dips are suppressed.
+- **4-line causal alert** — every anomaly produces: `WARN → SUBSYSTEM → EVIDENCE → ACTION`.
+- **IBM Granite explanations** — cited, structured JSON diagnoses from watsonx.ai, not unstructured chatbot text.
+
+On real NASA battery data, the system achieves **AUC 0.786** validated across 6 seeds.
 
 ---
 
@@ -179,6 +198,18 @@ The PINN's composite loss collapses discrimination once the network fits the ODE
 
 ---
 
+## Challenges & Accomplishments
+
+**PINN doesn't work.** The most surprising finding: a strict physics-informed neural network (PINN) — the kind every paper says should win — loses badly to a feature-only model that merely gates on physics. We proved this on real NASA B0005 data (AUC 0.349 vs 0.789) and documented the finding honestly rather than hiding it.
+
+**Eclipse false positives.** Before the Kepler propagator, every orbital shadow pass triggered a false alarm (solar drops to 0W → ML flags "fault"). Solving this required coupling eclipse geometry into the power model, the thermal model, and the physics rules — three independent systems had to agree.
+
+**10+ Vercel build failures.** The React console + FastAPI backend deploy to Vercel as one project. Debugging Node version incompatibilities, output directory resolution, and package.json conflicts across workspaces took significant iteration.
+
+**30 test suites, all passing.** Every component has regression tests: physics numerics, ML metrics, RAG retrieval, auth security, API server, config seams, and more. The test suite runs on every push via GitHub Actions.
+
+---
+
 ## Repository Structure
 
 ```
@@ -334,6 +365,15 @@ Every plan you gave — build, cross-check, test — was executed by Bob.
 - **No Kalman filter.** Model state is not corrected via data assimilation — a real digital twin would close this loop.
 - **Single spacecraft.** No fleet learning across multiple satellites.
 - **Granite is optional.** The ML + physics pipeline works entirely without an LLM. Granite adds human-readable explanations, not detection capability.
+
+---
+
+## What's Next
+
+- **Kalman filter / data assimilation** — close the loop between simulated and real telemetry by correcting model state from actual sensor readings.
+- **Fleet learning** — extend the digital twin to multiple spacecraft so anomaly patterns from one satellite improve detection on others.
+- **Physical edge hardware** — replace the virtual ESP32 with a real microcontroller running the same JSON-lines wire format.
+- **Higher-fidelity propagation** — J2 perturbation and atmospheric drag are validated in the codebase but not yet wired into the live telemetry stream.
 
 ---
 
