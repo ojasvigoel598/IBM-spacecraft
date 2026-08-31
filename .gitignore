@@ -74,3 +74,6 @@ bannerdownload/
 # Personal banner (not for repo)
 missionmind-banner-1920x600.png
 missionmind-logo-512.png
+
+# Personal images (not for repo)
+images-*.png
