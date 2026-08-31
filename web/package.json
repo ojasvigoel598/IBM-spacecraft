@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "build": "tsc -b && vite build --outDir ../dist",
     "lint": "oxlint",
     "preview": "vite preview"
   },
